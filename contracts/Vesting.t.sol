@@ -94,6 +94,31 @@ contract VestingTest is Test {
         );
     }
 
+    function test_createAgreement_whenArgumentsAreValid_emitsEventWithAgreementId()
+        public
+    {
+        address payer = makeAddr("alice");
+        address beneficiary = makeAddr("bob");
+        uint256 amount = 1_000;
+        uint256 startDate = block.timestamp + 1 days;
+        uint256 endDate = startDate + 3 days;
+        bool revocable = false;
+
+        _fundAndApprove(payer, amount);
+
+        vm.expectEmit();
+        emit Vesting.AgreementCreated(0);
+
+        _createAgreement(
+            payer,
+            beneficiary,
+            amount,
+            startDate,
+            endDate,
+            revocable
+        );
+    }
+
     function testFuzz_createMultipleAgreements_returnsDifferentIds(
         uint8 count,
         uint64 amount
