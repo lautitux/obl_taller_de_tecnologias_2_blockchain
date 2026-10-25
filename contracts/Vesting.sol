@@ -56,4 +56,27 @@ contract Vesting {
         emit AgreementCreated(agreementId);
         return agreementId;
     }
+
+    function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
+        Agreement storage agreement = agreements[agreementId];
+
+        uint256 amount = agreement.totalAmount;
+        uint256 startDate = agreement.startDate;
+        uint256 endDate = agreement.endDate;
+
+        uint256 secondsNow = block.timestamp;
+
+        if (startDate > secondsNow) {
+            return 0;
+        }
+
+        if (secondsNow >= endDate) {
+            return amount;
+        }
+
+        uint256 secondsPassed = secondsNow - startDate;
+        uint256 secondsTotal = endDate - startDate;
+
+        return (amount * secondsPassed) / secondsTotal;
+    }
 }
