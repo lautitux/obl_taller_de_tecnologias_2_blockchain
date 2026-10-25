@@ -63,6 +63,32 @@ contract VestingTest is Test {
         assertEq(agreementRevocable, revocable);
     }
 
+    function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer() public {
+        address payer = makeAddr("alice");
+        address beneficiary = makeAddr("bob");
+        uint256 amount = 1_000;
+        uint256 startDate = block.timestamp + 1 days;
+        uint256 endDate = startDate + 3 days;
+        bool revocable = false;
+
+        _fundAndApprove(payer, amount);
+
+        uint256 payerBalanceBefore = token.balanceOf(payer);
+        uint256 vestingBalanceBefore = token.balanceOf(address(vesting));
+
+        _createAgreement(
+            payer,
+            beneficiary,
+            amount,
+            startDate,
+            endDate,
+            revocable
+        );
+
+        assertEq(token.balanceOf(payer), payerBalanceBefore - amount);
+        assertEq(token.balanceOf(address(vesting)), vestingBalanceBefore + amount);
+    }
+
     function testFuzz_createMultipleAgreements_returnsDifferentIds(
         uint8 count,
         uint64 amount
@@ -160,6 +186,7 @@ contract VestingTest is Test {
             revocable
         );
     }
+
 
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
