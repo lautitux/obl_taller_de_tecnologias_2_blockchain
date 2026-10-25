@@ -147,6 +147,26 @@ contract VestingTest is Test {
         }
     }
 
+    function test_createAgreement_whenPayerDoesNotApproveEnoughTokens_Reverts()
+        public
+    {
+        uint256 amount = 1_000;
+        uint256 insufficientAmount = 500;
+        bool revocable = false;
+
+        _fundAndApprove(validPayer, insufficientAmount);
+
+        vm.expectRevert();
+        _createAgreement(
+            validPayer,
+            validBeneficiary,
+            amount,
+            validStartDate,
+            validEndDate,
+            revocable
+        );
+    }
+
     function test_createAgreement_whenBeneficiaryIsAddress0_Reverts() public {
         address beneficiary = address(0);
         bool revocable = false;
