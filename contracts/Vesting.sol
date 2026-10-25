@@ -15,6 +15,7 @@ contract Vesting {
     }
 
     mapping(uint256 => Agreement) public agreements;
+    uint256 private nextAgreementId = 0;
 
     function createAgreement(
         address beneficiary,
@@ -24,7 +25,8 @@ contract Vesting {
         uint256 endDate,
         bool revocable
     ) external returns (uint256) {
-        agreements[1] = Agreement(
+        uint256 agreementId = nextAgreementId++;
+        agreements[agreementId] = Agreement(
             msg.sender,
             beneficiary,
             token,
@@ -33,6 +35,6 @@ contract Vesting {
             endDate,
             revocable
         );
-        return 1;
+        return agreementId;
     }
 }
