@@ -2,8 +2,11 @@
 pragma solidity ^0.8.34;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Vesting {
+    using SafeERC20 for IERC20;
+
     struct Agreement {
         address payer;
         address beneficiary;
@@ -39,6 +42,8 @@ contract Vesting {
             endDate,
             revocable
         );
+
+        token.safeTransferFrom(msg.sender, address(this), totalAmount);
         return agreementId;
     }
 }
