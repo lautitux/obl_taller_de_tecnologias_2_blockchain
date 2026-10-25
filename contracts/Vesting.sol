@@ -27,6 +27,7 @@ contract Vesting {
     ) external returns (uint256) {
         require(beneficiary != address(0));
         require(totalAmount != 0);
+        require(endDate > startDate);
 
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement(
