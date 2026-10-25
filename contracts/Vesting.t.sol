@@ -66,4 +66,39 @@ contract VestingTest is Test {
         assertEq(agreementEndDate, endDate);
         assertEq(agreementRevocable, revocable);
     }
+
+    function testFuzz_createMultipleAgreements_whenArgumentsAreValid_createsDifferentAgreements(uint8 n)
+        public
+    {
+        address payer = makeAddr("alice");
+        address beneficiary = makeAddr("bob");
+        uint256 totalAmount = 1;
+        uint256 startDate = block.timestamp + 1 days;
+        uint256 endDate = block.timestamp + 4 days;
+        bool revocable = false;
+
+        token.mint(payer, uint256(n) * totalAmount);
+
+        uint256[] memory existingAgreements = new uint256[](n);
+
+        vm.startPrank(payer);
+        for (uint8 i = 0; i < n; i++) {
+            token.approve(address(vesting), totalAmount);
+            uint256 agreementId = vesting.createAgreement(
+                beneficiary,
+                IERC20(address(token)),
+                totalAmount,
+                startDate,
+                endDate,
+                revocable
+            );
+
+            for (uint256 j = 0; j < i; j++) {
+                assertNotEq(agreementId, existingAgreements[j], "duplicate agreement ID");
+            }
+
+            existingAgreements[i] = agreementId;
+        }
+        vm.stopPrank();
+    }
 }
