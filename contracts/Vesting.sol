@@ -7,6 +7,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract Vesting {
     using SafeERC20 for IERC20;
 
+    enum AgreementState {
+        Active
+    }
+
     struct Agreement {
         address payer;
         address beneficiary;
@@ -15,6 +19,7 @@ contract Vesting {
         uint256 startDate;
         uint256 endDate;
         bool revocable;
+        AgreementState state;
     }
 
     event AgreementCreated(uint256 indexed id);
@@ -42,7 +47,8 @@ contract Vesting {
             totalAmount,
             startDate,
             endDate,
-            revocable
+            revocable,
+            AgreementState.Active
         );
 
         token.safeTransferFrom(msg.sender, address(this), totalAmount);
