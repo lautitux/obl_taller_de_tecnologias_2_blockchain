@@ -28,21 +28,17 @@ contract VestingTest is Test {
     {
         address payer = makeAddr("alice");
         address beneficiary = makeAddr("bob");
-        uint256 totalAmount = 1000;
+        uint256 amount = 1_000;
         uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = block.timestamp + 4 days;
+        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        token.mint(payer, totalAmount);
+        _fundAndApprove(payer, amount);
 
-        vm.prank(payer);
-        token.approve(address(vesting), totalAmount);
-
-        vm.prank(payer);
-        uint256 agreementId = vesting.createAgreement(
+        uint256 agreementId = _createAgreement(
+            payer,
             beneficiary,
-            IERC20(address(token)),
-            totalAmount,
+            amount,
             startDate,
             endDate,
             revocable
@@ -52,7 +48,7 @@ contract VestingTest is Test {
             address agreementPayer,
             address agreementBeneficiary,
             IERC20 agreementToken,
-            uint256 agreementTotalAmount,
+            uint256 agreementAmount,
             uint256 agreementStartDate,
             uint256 agreementEndDate,
             bool agreementRevocable
@@ -61,44 +57,69 @@ contract VestingTest is Test {
         assertEq(agreementPayer, payer);
         assertEq(agreementBeneficiary, beneficiary);
         assertEq(address(agreementToken), address(token));
-        assertEq(agreementTotalAmount, totalAmount);
+        assertEq(agreementAmount, amount);
         assertEq(agreementStartDate, startDate);
         assertEq(agreementEndDate, endDate);
         assertEq(agreementRevocable, revocable);
     }
 
-    function testFuzz_createMultipleAgreements_whenArgumentsAreValid_createsDifferentAgreements(uint8 n)
-        public
-    {
+    function testFuzz_createMultipleAgreements_returnsDifferentIds(
+        uint8 count,
+        uint64 amount
+    ) public {
+        count = uint8(bound(count, 1, 255));
         address payer = makeAddr("alice");
         address beneficiary = makeAddr("bob");
-        uint256 totalAmount = 1;
         uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = block.timestamp + 4 days;
-        bool revocable = false;
+        uint256 endDate = startDate + 3 days;
 
-        token.mint(payer, uint256(n) * totalAmount);
+        uint256 total = uint256(count) * uint256(amount);
+        _fundAndApprove(payer, total);
 
-        uint256[] memory existingAgreements = new uint256[](n);
+        uint256[] memory ids = new uint256[](count);
 
-        vm.startPrank(payer);
-        for (uint8 i = 0; i < n; i++) {
-            token.approve(address(vesting), totalAmount);
-            uint256 agreementId = vesting.createAgreement(
+        for (uint8 i; i < count; ++i) {
+            uint256 id = _createAgreement(
+                payer,
+                beneficiary,
+                amount,
+                startDate,
+                endDate,
+                false
+            );
+
+            for (uint256 j; j < i; ++j) {
+                assertNotEq(id, ids[j], "duplicate agreement ID");
+            }
+
+            ids[i] = id;
+        }
+    }
+
+    function _fundAndApprove(address payer, uint256 amount) internal {
+        token.mint(payer, amount);
+
+        vm.prank(payer);
+        token.approve(address(vesting), amount);
+    }
+
+    function _createAgreement(
+        address payer,
+        address beneficiary,
+        uint256 amount,
+        uint256 startDate,
+        uint256 endDate,
+        bool revocable
+    ) internal returns (uint256) {
+        vm.prank(payer);
+        return
+            vesting.createAgreement(
                 beneficiary,
                 IERC20(address(token)),
-                totalAmount,
+                amount,
                 startDate,
                 endDate,
                 revocable
             );
-
-            for (uint256 j = 0; j < i; j++) {
-                assertNotEq(agreementId, existingAgreements[j], "duplicate agreement ID");
-            }
-
-            existingAgreements[i] = agreementId;
-        }
-        vm.stopPrank();
     }
 }
