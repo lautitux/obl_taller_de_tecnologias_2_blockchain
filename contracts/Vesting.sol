@@ -17,6 +17,8 @@ contract Vesting {
         bool revocable;
     }
 
+    event AgreementCreated(uint256 indexed id);
+
     mapping(uint256 => Agreement) public agreements;
     uint256 private nextAgreementId = 0;
 
@@ -44,6 +46,8 @@ contract Vesting {
         );
 
         token.safeTransferFrom(msg.sender, address(this), totalAmount);
+
+        emit AgreementCreated(agreementId);
         return agreementId;
     }
 }
