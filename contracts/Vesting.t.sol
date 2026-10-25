@@ -58,6 +58,7 @@ contract VestingTest is Test {
             uint256 agreementStartDate,
             uint256 agreementEndDate,
             bool agreementRevocable,
+            Vesting.AgreementState agreementState
         ) = vesting.agreements(agreementId);
 
         assertEq(agreementPayer, validPayer);
@@ -67,6 +68,7 @@ contract VestingTest is Test {
         assertEq(agreementStartDate, validStartDate);
         assertEq(agreementEndDate, validEndDate);
         assertEq(agreementRevocable, revocable);
+        assertEq(uint(agreementState), uint(Vesting.AgreementState.Active));
     }
 
     function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer()
