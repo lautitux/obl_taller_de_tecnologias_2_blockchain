@@ -96,11 +96,32 @@ contract VestingTest is Test {
         }
     }
 
-    function test_createArgreement_whenBeneficiaryIsAddress0_Reverts() public {
+    function test_createAgreement_whenBeneficiaryIsAddress0_Reverts() public {
 
         address payer = makeAddr("alice");
         address beneficiary = address(0);
         uint256 amount = 1_000;
+        uint256 startDate = block.timestamp + 1 days;
+        uint256 endDate = startDate + 3 days;
+        bool revocable = false;
+
+        _fundAndApprove(payer, amount);
+
+        vm.expectRevert();
+        _createAgreement(
+            payer,
+            beneficiary,
+            amount,
+            startDate,
+            endDate,
+            revocable
+        );
+    }
+
+    function test_createAgreement_whenAmountIs0_Reverts() public {
+        address payer = makeAddr("alice");
+        address beneficiary = makeAddr("bob");
+        uint256 amount = 0;
         uint256 startDate = block.timestamp + 1 days;
         uint256 endDate = startDate + 3 days;
         bool revocable = false;
