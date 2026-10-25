@@ -18,6 +18,7 @@ contract VestingTest is Test {
     Vesting vesting;
     MockToken token;
 
+    uint256 constant today = 1_792_977_722;
     address validPayer;
     address validBeneficiary;
     uint256 constant validAmount = 1_000;
@@ -221,11 +222,112 @@ contract VestingTest is Test {
         );
     }
 
+    function test_vestedAmountOf_whenAgreementExistsAndDateIsBeforeStart_returns0()
+        public
+    {
+        vm.warp(today);
+
+        uint256 amount = 1_000;
+        uint256 startDate = today + 1 days;
+        uint256 endDate = startDate + 2 days;
+
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            endDate
+        );
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, 0);
+    }
+
+    function test_vestedAmountOf_whenAgreementExistsAndDateIsAfterEnd_returnsTotalAmount()
+        public
+    {
+        vm.warp(today);
+
+        uint256 amount = 1_000;
+        uint256 startDate = today + 1 days;
+        uint256 endDate = startDate + 2 days;
+
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            endDate
+        );
+
+        vm.warp(endDate + 1 days);
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, amount);
+    }
+
+    function test_vestedAmountOf_whenAgreementExists_returnsVestedAmount()
+        public
+    {
+        vm.warp(today);
+
+        uint256 amount = 1_000;
+        uint256 startDate = today + 1 days;
+        uint256 endDate = startDate + 2 days;
+
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            endDate
+        );
+
+        uint256[5] memory checkpoints = [
+            startDate,
+            startDate + 1 hours,
+            startDate + 12 hours,
+            startDate + 1 days,
+            endDate
+        ];
+
+        uint256[5] memory expected = [
+            0,
+            (amount * 1 hours) / 2 days,
+            (amount * 12 hours) / 2 days,
+            amount / 2,
+            amount
+        ];
+
+        uint256[] memory actual = new uint256[](expected.length);
+
+        for (uint256 i; i < checkpoints.length; i++) {
+            vm.warp(checkpoints[i]);
+            actual[i] = vesting.vestedAmountOf(agreementId);
+        }
+
+        for (uint256 i; i < checkpoints.length; i++) {
+            assertEq(actual[i], expected[i]);
+        }
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
         vm.prank(payer);
         token.approve(address(vesting), amount);
+    }
+
+    function _fundAndCreateAgreement(
+        uint256 amount,
+        uint256 startDate,
+        uint256 endDate
+    ) internal returns (uint256) {
+        _fundAndApprove(validPayer, amount);
+        uint256 id = _createAgreement(
+            validPayer,
+            validBeneficiary,
+            validAmount,
+            startDate,
+            endDate,
+            false
+        );
+        return id;
     }
 
     function _createAgreement(
