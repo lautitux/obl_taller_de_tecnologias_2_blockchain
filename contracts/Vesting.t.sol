@@ -18,29 +18,35 @@ contract VestingTest is Test {
     Vesting vesting;
     MockToken token;
 
+    address validPayer;
+    address validBeneficiary;
+    uint256 constant validAmount = 1_000;
+    uint256 validStartDate;
+    uint256 validEndDate;
+
     function setUp() public {
         vesting = new Vesting();
         token = new MockToken();
+
+        validPayer = makeAddr("alice");
+        validBeneficiary = makeAddr("bob");
+        validStartDate = block.timestamp + 1 days;
+        validEndDate = validStartDate + 3 days;
     }
 
     function test_createAgreement_whenArgumentsAreValid_createsAgreement()
         public
     {
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
-        uint256 amount = 1_000;
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
         uint256 agreementId = _createAgreement(
-            payer,
-            beneficiary,
-            amount,
-            startDate,
-            endDate,
+            validPayer,
+            validBeneficiary,
+            validAmount,
+            validStartDate,
+            validEndDate,
             revocable
         );
 
@@ -51,70 +57,60 @@ contract VestingTest is Test {
             uint256 agreementAmount,
             uint256 agreementStartDate,
             uint256 agreementEndDate,
-            bool agreementRevocable
+            bool agreementRevocable,
         ) = vesting.agreements(agreementId);
 
-        assertEq(agreementPayer, payer);
-        assertEq(agreementBeneficiary, beneficiary);
+        assertEq(agreementPayer, validPayer);
+        assertEq(agreementBeneficiary, validBeneficiary);
         assertEq(address(agreementToken), address(token));
-        assertEq(agreementAmount, amount);
-        assertEq(agreementStartDate, startDate);
-        assertEq(agreementEndDate, endDate);
+        assertEq(agreementAmount, validAmount);
+        assertEq(agreementStartDate, validStartDate);
+        assertEq(agreementEndDate, validEndDate);
         assertEq(agreementRevocable, revocable);
     }
 
     function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer()
         public
     {
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
-        uint256 amount = 1_000;
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
-        uint256 payerBalanceBefore = token.balanceOf(payer);
+        uint256 payerBalanceBefore = token.balanceOf(validPayer);
         uint256 vestingBalanceBefore = token.balanceOf(address(vesting));
 
         _createAgreement(
-            payer,
-            beneficiary,
-            amount,
-            startDate,
-            endDate,
+            validPayer,
+            validBeneficiary,
+            validAmount,
+            validStartDate,
+            validEndDate,
             revocable
         );
 
-        assertEq(token.balanceOf(payer), payerBalanceBefore - amount);
+        assertEq(token.balanceOf(validPayer), payerBalanceBefore - validAmount);
         assertEq(
             token.balanceOf(address(vesting)),
-            vestingBalanceBefore + amount
+            vestingBalanceBefore + validAmount
         );
     }
 
     function test_createAgreement_whenArgumentsAreValid_emitsEventWithAgreementId()
         public
     {
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
-        uint256 amount = 1_000;
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
         vm.expectEmit();
         emit Vesting.AgreementCreated(0);
 
         _createAgreement(
-            payer,
-            beneficiary,
-            amount,
-            startDate,
-            endDate,
+            validPayer,
+            validBeneficiary,
+            validAmount,
+            validStartDate,
+            validEndDate,
             revocable
         );
     }
@@ -125,23 +121,19 @@ contract VestingTest is Test {
     ) public {
         count = uint8(bound(count, 1, 255));
         amount = uint64(bound(amount, 1, type(uint64).max));
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
 
         uint256 total = uint256(count) * uint256(amount);
-        _fundAndApprove(payer, total);
+        _fundAndApprove(validPayer, total);
 
         uint256[] memory ids = new uint256[](count);
 
         for (uint8 i; i < count; ++i) {
             uint256 id = _createAgreement(
-                payer,
-                beneficiary,
+                validPayer,
+                validBeneficiary,
                 amount,
-                startDate,
-                endDate,
+                validStartDate,
+                validEndDate,
                 false
             );
 
@@ -154,43 +146,35 @@ contract VestingTest is Test {
     }
 
     function test_createAgreement_whenBeneficiaryIsAddress0_Reverts() public {
-        address payer = makeAddr("alice");
         address beneficiary = address(0);
-        uint256 amount = 1_000;
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
         vm.expectRevert();
         _createAgreement(
-            payer,
+            validPayer,
             beneficiary,
-            amount,
-            startDate,
-            endDate,
+            validAmount,
+            validStartDate,
+            validEndDate,
             revocable
         );
     }
 
     function test_createAgreement_whenAmountIs0_Reverts() public {
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
         uint256 amount = 0;
-        uint256 startDate = block.timestamp + 1 days;
-        uint256 endDate = startDate + 3 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
         vm.expectRevert();
         _createAgreement(
-            payer,
-            beneficiary,
+            validPayer,
+            validBeneficiary,
             amount,
-            startDate,
-            endDate,
+            validStartDate,
+            validEndDate,
             revocable
         );
     }
@@ -198,20 +182,17 @@ contract VestingTest is Test {
     function test_createAgreement_whenStartDateIsBeforeEndDate_Reverts()
         public
     {
-        address payer = makeAddr("alice");
-        address beneficiary = makeAddr("bob");
-        uint256 amount = 1_000;
         uint256 startDate = block.timestamp + 2 days;
         uint256 endDate = startDate - 1 days;
         bool revocable = false;
 
-        _fundAndApprove(payer, amount);
+        _fundAndApprove(validPayer, validAmount);
 
         vm.expectRevert();
         _createAgreement(
-            payer,
-            beneficiary,
-            amount,
+            validPayer,
+            validBeneficiary,
+            validAmount,
             startDate,
             endDate,
             revocable
