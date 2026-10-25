@@ -26,6 +26,7 @@ contract Vesting {
         bool revocable
     ) external returns (uint256) {
         require(beneficiary != address(0));
+        require(totalAmount != 0);
 
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement(

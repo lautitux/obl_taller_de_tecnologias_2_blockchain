@@ -68,6 +68,7 @@ contract VestingTest is Test {
         uint64 amount
     ) public {
         count = uint8(bound(count, 1, 255));
+        amount = uint64(bound(amount, 1, type(uint64).max));
         address payer = makeAddr("alice");
         address beneficiary = makeAddr("bob");
         uint256 startDate = block.timestamp + 1 days;
