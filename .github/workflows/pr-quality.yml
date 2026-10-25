@@ -1,0 +1,182 @@
+name: PR quality
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-quality-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  formatting:
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+
+  types:
+    name: Build and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  tests:
+    name: Tests and coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node .github/scripts/clean-coverage.mjs
+      - name: Solidity tests
+        id: solidity
+        continue-on-error: true
+        run: |
+          mkdir -p coverage
+          npm run test:solidity -- --coverage 2>&1 | tee coverage/solidity-tests.log
+      - name: Enforce 100% Solidity line coverage
+        id: coverage
+        continue-on-error: true
+        # Hardhat replaces build-info when switching coverage instrumentation.
+        # Rebuild normally so the checker can reconcile uninstrumented ASTs.
+        run: npm run build && npm run coverage:check
+      - name: TypeScript tests (do not contribute to coverage)
+        id: typescript
+        continue-on-error: true
+        run: npm run test:typescript 2>&1 | tee coverage/typescript-tests.log
+      - name: Require all test stages to pass
+        env:
+          SOLIDITY: ${{ steps.solidity.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+          TYPESCRIPT: ${{ steps.typescript.outcome }}
+        run: |
+          printf '## Test stages\n\n| Stage | Result |\n| --- | --- |\n| Solidity | %s |\n| Coverage | %s |\n| TypeScript | %s |\n' "$SOLIDITY" "$COVERAGE" "$TYPESCRIPT" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$SOLIDITY" == success && "$COVERAGE" == success && "$TYPESCRIPT" == success ]]
+      - name: Upload available test and coverage reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: solidity-coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  lint:
+    name: Solidity lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.8.6
+          cache: false
+      - name: Lint production Solidity
+        run: |
+          mkdir -p lint-reports
+          npm run lint:sol 2>&1 | tee lint-reports/forge-lint.log
+      - name: Informational and gas findings
+        if: ${{ !cancelled() && hashFiles('node_modules/.package-lock.json') != '' }}
+        run: |
+          mkdir -p lint-reports
+          npm run lint:sol:advisory 2>&1 | tee lint-reports/forge-advisory.log
+      - name: Lint summary
+        if: ${{ always() }}
+        run: |
+          printf '## Solidity lint\n\nHigh, medium, and low findings block this check. Informational and gas findings are advisory. Test files are excluded from Forge lint and included in Prettier. See the logs and artifacts for findings.\n' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload available lint logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: solidity-lint
+          path: lint-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: PR summary
+    needs: [formatting, types, tests, lint]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      # No checkout, downloaded PR artifacts, or execution of repository code.
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: |
+            const results = JSON.parse(process.env.CHECK_RESULTS);
+            const pr = context.payload.pull_request;
+            const marker = '<!-- pr-quality-summary -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const names = { formatting: 'Formatting', types: 'Build and types', tests: 'Tests and coverage', lint: 'Solidity lint' };
+            const rawCoverage = results.tests.outputs.coverage || '';
+            const coverage = /^\d+\/\d+ lines \(\d+\.\d+%\)$/.test(rawCoverage) ? rawCoverage : 'Unavailable; see test logs';
+            const body = [marker, '## PR quality results', '',
+              `Commit: ${pr.head.sha}`, '', '| Check | Result |', '| --- | --- |',
+              ...Object.entries(names).map(([id, name]) => `| ${name} | ${results[id].result} |`),
+              '', `Solidity line coverage: ${coverage}. Required: 100% per production source.`,
+              '', `[Logs and downloadable reports](${runUrl})`,
+              '', 'Solidity tests contribute to coverage. All Solidity files, including tests, are formatted; tests are excluded from Forge lint.'
+            ].join('\n');
+            await core.summary.addRaw(body).write();
+            if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}` || pr.user.login === 'dependabot[bot]' || context.actor === 'dependabot[bot]') return;
+            try {
+              const { data: current } = await github.rest.pulls.get({ ...context.repo, pull_number: pr.number });
+              if (current.head.sha !== pr.head.sha || current.state !== 'open') return;
+              const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: pr.number, per_page: 100 });
+              const existing = comments.find(comment => comment.user.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+              } else {
+                await github.rest.issues.createComment({ ...context.repo, issue_number: pr.number, body });
+              }
+            } catch (error) {
+              core.warning(`Could not update PR comment: ${error.message}`);
+            }
