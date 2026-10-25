@@ -25,6 +25,8 @@ contract Vesting {
         uint256 endDate,
         bool revocable
     ) external returns (uint256) {
+        require(beneficiary != address(0));
+
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement(
             msg.sender,
