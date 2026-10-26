@@ -58,6 +58,8 @@ contract Vesting {
 
     function cancelAgreement(uint256 agreementId) external {
         Agreement storage agreement = agreements[agreementId];
+        require(agreement.configuration.revocable);
+
         agreement.state = AgreementState.Cancelled;
     }
 
