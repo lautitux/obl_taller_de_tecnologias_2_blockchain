@@ -143,7 +143,7 @@ contract VestingTest is Test {
         }
     }
 
-    function test_createAgreement_whenPayerDoesNotApproveEnoughTokens_Reverts()
+    function test_createAgreement_whenPayerDoesNotApproveEnoughTokens_thenReverts()
         public
     {
         uint256 amount = 1_000;
@@ -163,7 +163,7 @@ contract VestingTest is Test {
         );
     }
 
-    function test_createAgreement_whenBeneficiaryIsAddress0_Reverts() public {
+    function test_createAgreement_whenBeneficiaryIsAddress0_thenReverts() public {
         address beneficiary = address(0);
         bool revocable = false;
 
@@ -180,7 +180,7 @@ contract VestingTest is Test {
         );
     }
 
-    function test_createAgreement_whenAmountIs0_Reverts() public {
+    function test_createAgreement_whenAmountIs0_thenReverts() public {
         uint256 amount = 0;
         bool revocable = false;
 
@@ -197,7 +197,7 @@ contract VestingTest is Test {
         );
     }
 
-    function test_createAgreement_whenStartDateIsBeforeEndDate_Reverts()
+    function test_createAgreement_whenStartDateIsBeforeEndDate_thenReverts()
         public
     {
         uint256 startDate = block.timestamp + 2 days;
