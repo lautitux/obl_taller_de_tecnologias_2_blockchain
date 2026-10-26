@@ -330,9 +330,26 @@ contract VestingTest is Test {
         }
     }
 
-    function test_vestedAmountOf_whenAgreementIsNonExistant_thenReverts() public {
+    function test_vestedAmountOf_whenAgreementIsNonExistant_thenReverts()
+        public
+    {
         vm.expectRevert();
         vesting.vestedAmountOf(1234);
+    }
+
+    function test_cancelAgreement_whenAgreementExistsAndIsRevocable_thenCancels()
+        public
+    {
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+
+        vesting.cancelAgreement(agreementId);
+
+        (, , Vesting.AgreementState agreementState) = vesting.agreements(
+            agreementId
+        );
+
+        assertEq(uint(agreementState), uint(Vesting.AgreementState.Cancelled));
     }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
@@ -347,6 +364,27 @@ contract VestingTest is Test {
         uint256 startDate,
         uint256 endDate
     ) internal returns (uint256) {
+        return _fundAndCreateAgreement(amount, startDate, endDate, false);
+    }
+
+    function _fundAndCreateAgreement(
+        bool revocable
+    ) internal returns (uint256) {
+        return
+            _fundAndCreateAgreement(
+                validAmount,
+                validStartDate,
+                validEndDate,
+                revocable
+            );
+    }
+
+    function _fundAndCreateAgreement(
+        uint256 amount,
+        uint256 startDate,
+        uint256 endDate,
+        bool revocable
+    ) internal returns (uint256) {
         _fundAndApprove(validPayer, amount);
         uint256 id = _createAgreement(
             validPayer,
@@ -354,7 +392,7 @@ contract VestingTest is Test {
             amount,
             startDate,
             endDate,
-            false
+            revocable
         );
         return id;
     }
