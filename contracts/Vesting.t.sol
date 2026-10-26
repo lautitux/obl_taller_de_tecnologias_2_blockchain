@@ -53,22 +53,17 @@ contract VestingTest is Test {
 
         (
             address agreementPayer,
-            address agreementBeneficiary,
-            IERC20 agreementToken,
-            uint256 agreementAmount,
-            uint256 agreementStartDate,
-            uint256 agreementEndDate,
-            bool agreementRevocable,
+            Vesting.AgreementConfiguration memory agreement,
             Vesting.AgreementState agreementState
         ) = vesting.agreements(agreementId);
 
         assertEq(agreementPayer, validPayer);
-        assertEq(agreementBeneficiary, validBeneficiary);
-        assertEq(address(agreementToken), address(token));
-        assertEq(agreementAmount, validAmount);
-        assertEq(agreementStartDate, validStartDate);
-        assertEq(agreementEndDate, validEndDate);
-        assertEq(agreementRevocable, revocable);
+        assertEq(agreement.beneficiary, validBeneficiary);
+        assertEq(address(agreement.token), address(token));
+        assertEq(agreement.totalAmount, validAmount);
+        assertEq(agreement.startDate, validStartDate);
+        assertEq(agreement.endDate, validEndDate);
+        assertEq(agreement.revocable, revocable);
         assertEq(uint(agreementState), uint(Vesting.AgreementState.Active));
     }
 
@@ -367,15 +362,16 @@ contract VestingTest is Test {
         uint256 endDate,
         bool revocable
     ) internal returns (uint256) {
+        Vesting.AgreementConfiguration memory configuration = Vesting
+            .AgreementConfiguration({
+                beneficiary: beneficiary,
+                token: IERC20(address(token)),
+                totalAmount: amount,
+                startDate: startDate,
+                endDate: endDate,
+                revocable: revocable
+            });
         vm.prank(payer);
-        return
-            vesting.createAgreement(
-                beneficiary,
-                IERC20(address(token)),
-                amount,
-                startDate,
-                endDate,
-                revocable
-            );
+        return vesting.createAgreement(configuration);
     }
 }

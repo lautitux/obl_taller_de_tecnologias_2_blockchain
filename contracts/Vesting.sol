@@ -11,14 +11,18 @@ contract Vesting {
         Active
     }
 
-    struct Agreement {
-        address payer;
+    struct AgreementConfiguration {
         address beneficiary;
         IERC20 token;
         uint256 totalAmount;
         uint256 startDate;
         uint256 endDate;
         bool revocable;
+    }
+
+    struct Agreement {
+        address payer;
+        AgreementConfiguration configuration;
         AgreementState state;
     }
 
@@ -28,37 +32,32 @@ contract Vesting {
     uint256 private nextAgreementId = 0;
 
     function createAgreement(
-        address beneficiary,
-        IERC20 token,
-        uint256 totalAmount,
-        uint256 startDate,
-        uint256 endDate,
-        bool revocable
+        AgreementConfiguration calldata config
     ) external returns (uint256) {
-        require(beneficiary != address(0));
-        require(totalAmount != 0);
-        require(endDate > startDate);
+        require(config.beneficiary != address(0));
+        require(config.totalAmount != 0);
+        require(config.endDate > config.startDate);
 
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement({
             payer: msg.sender,
-            beneficiary: beneficiary,
-            token: token,
-            totalAmount: totalAmount,
-            startDate: startDate,
-            endDate: endDate,
-            revocable: revocable,
+            configuration: config,
             state: AgreementState.Active
         });
 
-        token.safeTransferFrom(msg.sender, address(this), totalAmount);
+        config.token.safeTransferFrom(
+            msg.sender,
+            address(this),
+            config.totalAmount
+        );
 
         emit AgreementCreated(agreementId);
         return agreementId;
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
-        Agreement storage agreement = agreements[agreementId];
+        AgreementConfiguration storage agreement = agreements[agreementId]
+            .configuration;
 
         uint256 amount = agreement.totalAmount;
         uint256 startDate = agreement.startDate;
