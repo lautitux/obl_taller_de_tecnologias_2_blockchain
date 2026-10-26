@@ -362,6 +362,13 @@ contract VestingTest is Test {
         vesting.cancelAgreement(agreementId);
     }
 
+    function test_cancelAgreement_whenAgreementIsNonExistant_thenReverts()
+        public
+    {
+        vm.expectRevert();
+        vesting.cancelAgreement(1234);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
