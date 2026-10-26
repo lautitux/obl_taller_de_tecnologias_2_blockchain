@@ -40,20 +40,47 @@ contract Vesting {
         require(endDate > startDate);
 
         uint256 agreementId = nextAgreementId++;
-        agreements[agreementId] = Agreement(
-            msg.sender,
-            beneficiary,
-            token,
-            totalAmount,
-            startDate,
-            endDate,
-            revocable,
-            AgreementState.Active
-        );
+        agreements[agreementId] = Agreement({
+            payer: msg.sender,
+            beneficiary: beneficiary,
+            token: token,
+            totalAmount: totalAmount,
+            startDate: startDate,
+            endDate: endDate,
+            revocable: revocable,
+            state: AgreementState.Active
+        });
 
         token.safeTransferFrom(msg.sender, address(this), totalAmount);
 
         emit AgreementCreated(agreementId);
         return agreementId;
+    }
+
+    function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
+        Agreement storage agreement = agreements[agreementId];
+
+        uint256 amount = agreement.totalAmount;
+        uint256 startDate = agreement.startDate;
+        uint256 endDate = agreement.endDate;
+
+        uint256 secondsNow = block.timestamp;
+
+        // Vesting starts when the block time reaches startDate.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (startDate > secondsNow) {
+            return 0;
+        }
+
+        // The full amount is vested once the block time reaches endDate.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (secondsNow >= endDate) {
+            return amount;
+        }
+
+        uint256 secondsElapsed = secondsNow - startDate;
+        uint256 secondsTotal = endDate - startDate;
+
+        return (amount * secondsElapsed) / secondsTotal;
     }
 }
