@@ -78,9 +78,9 @@ contract Vesting {
             return amount;
         }
 
-        uint256 secondsPassed = secondsNow - startDate;
+        uint256 secondsElapsed = secondsNow - startDate;
         uint256 secondsTotal = endDate - startDate;
 
-        return (amount * secondsPassed) / secondsTotal;
+        return (amount * secondsElapsed) / secondsTotal;
     }
 }

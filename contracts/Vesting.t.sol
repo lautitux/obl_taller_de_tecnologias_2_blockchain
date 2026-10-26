@@ -306,6 +306,35 @@ contract VestingTest is Test {
         }
     }
 
+    function testFuzz_vestedAmountOf_whenAgreementExists_roundsDownCorrectly(
+        uint256 amount,
+        uint32 elapsed
+    ) public {
+        vm.warp(today);
+        amount = bound(amount, 1, 1e30);
+        uint256 startDate = today;
+        uint256 duration = 2 days;
+        elapsed = uint32(bound(elapsed, 0, duration));
+
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            startDate + duration
+        );
+
+        vm.warp(startDate + elapsed);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+        uint256 expected = (amount * elapsed) / duration;
+
+        assertEq(vested, expected);
+        assertLe(vested, amount);
+
+        if (elapsed < duration) {
+            assertLt(vested, amount);
+        }
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
@@ -322,7 +351,7 @@ contract VestingTest is Test {
         uint256 id = _createAgreement(
             validPayer,
             validBeneficiary,
-            validAmount,
+            amount,
             startDate,
             endDate,
             false
