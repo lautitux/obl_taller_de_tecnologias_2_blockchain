@@ -58,6 +58,7 @@ contract Vesting {
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
         AgreementConfiguration storage agreement = agreements[agreementId]
             .configuration;
+        require(agreement.beneficiary != address(0));
 
         uint256 amount = agreement.totalAmount;
         uint256 startDate = agreement.startDate;
