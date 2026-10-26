@@ -8,7 +8,8 @@ contract Vesting {
     using SafeERC20 for IERC20;
 
     enum AgreementState {
-        Active
+        Active,
+        Cancelled
     }
 
     struct AgreementConfiguration {
@@ -53,6 +54,11 @@ contract Vesting {
 
         emit AgreementCreated(agreementId);
         return agreementId;
+    }
+
+    function cancelAgreement(uint256 agreementId) external {
+        Agreement storage agreement = agreements[agreementId];
+        agreement.state = AgreementState.Cancelled;
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
