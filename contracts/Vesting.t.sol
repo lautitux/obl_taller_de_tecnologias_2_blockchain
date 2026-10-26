@@ -343,6 +343,7 @@ contract VestingTest is Test {
         bool revocable = true;
         uint256 agreementId = _fundAndCreateAgreement(revocable);
 
+        vm.prank(validPayer);
         vesting.cancelAgreement(agreementId);
 
         (, , Vesting.AgreementState agreementState) = vesting.agreements(
@@ -358,6 +359,7 @@ contract VestingTest is Test {
         bool revocable = false;
         uint256 agreementId = _fundAndCreateAgreement(revocable);
 
+        vm.prank(validPayer);
         vm.expectRevert();
         vesting.cancelAgreement(agreementId);
     }
@@ -365,8 +367,19 @@ contract VestingTest is Test {
     function test_cancelAgreement_whenAgreementIsNonExistant_thenReverts()
         public
     {
+        vm.prank(validPayer);
         vm.expectRevert();
         vesting.cancelAgreement(1234);
+    }
+
+    function test_cancelAgreement_whenAddressCancellingIsNotPayer_thenReverts() public {
+        address notPayer = makeAddr("charly");
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+
+        vm.prank(notPayer);
+        vm.expectRevert();
+        vesting.cancelAgreement(agreementId);
     }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
