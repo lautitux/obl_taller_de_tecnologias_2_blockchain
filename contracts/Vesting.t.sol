@@ -330,6 +330,11 @@ contract VestingTest is Test {
         }
     }
 
+    function test_vestedAmountOf_whenAgreementIsNonExistant_thenReverts() public {
+        vm.expectRevert();
+        vesting.vestedAmountOf(1234);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
