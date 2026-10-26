@@ -352,6 +352,16 @@ contract VestingTest is Test {
         assertEq(uint(agreementState), uint(Vesting.AgreementState.Cancelled));
     }
 
+    function test_cancelAgreement_whenAgreementExistsButIsNotRevocable_thenReverts()
+        public
+    {
+        bool revocable = false;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+
+        vm.expectRevert();
+        vesting.cancelAgreement(agreementId);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
