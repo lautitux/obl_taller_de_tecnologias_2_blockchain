@@ -61,6 +61,9 @@ contract Vesting {
         require(agreement.configuration.revocable);
         require(agreement.payer == msg.sender);
 
+        uint256 secondsNow = block.timestamp;
+        require(secondsNow < agreement.configuration.endDate);
+
         agreement.state = AgreementState.Cancelled;
     }
 
