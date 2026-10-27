@@ -25,6 +25,7 @@ contract Vesting {
         address payer;
         AgreementConfiguration configuration;
         AgreementState state;
+        uint256 vestedAmountBeforeCancelled;
     }
 
     event AgreementCreated(uint256 indexed id);
@@ -43,7 +44,8 @@ contract Vesting {
         agreements[agreementId] = Agreement({
             payer: msg.sender,
             configuration: config,
-            state: AgreementState.Active
+            state: AgreementState.Active,
+            vestedAmountBeforeCancelled: 0
         });
 
         config.token.safeTransferFrom(
@@ -58,13 +60,26 @@ contract Vesting {
 
     function cancelAgreement(uint256 agreementId) external {
         Agreement storage agreement = agreements[agreementId];
-        require(agreement.configuration.revocable);
-        require(agreement.payer == msg.sender);
+
+        uint256 amount = agreement.configuration.totalAmount;
+        uint256 startDate = agreement.configuration.startDate;
+        uint256 endDate = agreement.configuration.endDate;
 
         uint256 secondsNow = block.timestamp;
-        require(secondsNow < agreement.configuration.endDate);
+
+        require(agreement.configuration.revocable);
+        require(agreement.payer == msg.sender);
+        // Cancelling may only be done before the end date.
+        // forge-lint: disable-next-line(block-timestamp)
+        require(secondsNow < endDate);
 
         agreement.state = AgreementState.Cancelled;
+        agreement.vestedAmountBeforeCancelled = calculateVestedAmount(
+            amount,
+            startDate,
+            endDate,
+            secondsNow
+        );
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
@@ -78,14 +93,19 @@ contract Vesting {
 
         uint256 secondsNow = block.timestamp;
 
-        // Vesting starts when the block time reaches startDate.
-        // forge-lint: disable-next-line(block-timestamp)
+        return calculateVestedAmount(amount, startDate, endDate, secondsNow);
+    }
+
+    function calculateVestedAmount(
+        uint256 amount,
+        uint256 startDate,
+        uint256 endDate,
+        uint256 secondsNow
+    ) internal pure returns (uint256) {
         if (startDate > secondsNow) {
             return 0;
         }
 
-        // The full amount is vested once the block time reaches endDate.
-        // forge-lint: disable-next-line(block-timestamp)
         if (secondsNow >= endDate) {
             return amount;
         }
