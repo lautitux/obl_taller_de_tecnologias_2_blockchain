@@ -436,6 +436,30 @@ contract VestingTest is Test {
         assertEq(expectedVestedAmount, vestedAmountBeforeCancelled);
     }
 
+    function test_cancelAgreement_whenAgreementIsCancelled_doesNotAccumulateNewVestedAmount()
+        public
+    {
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 cancellationDate = validStartDate + 1 days;
+
+        vm.warp(cancellationDate);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        uint256 vestedAmountAtCancellation = vesting.vestedAmountOf(
+            agreementId
+        );
+
+        vm.warp(validEndDate);
+
+        uint256 vestedAmountAfterCancellation = vesting.vestedAmountOf(
+            agreementId
+        );
+
+        assertEq(vestedAmountAfterCancellation, vestedAmountAtCancellation);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
