@@ -83,13 +83,16 @@ contract Vesting {
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
-        AgreementConfiguration storage agreement = agreements[agreementId]
-            .configuration;
-        require(agreement.beneficiary != address(0));
+        Agreement storage agreement = agreements[agreementId];
+        require(agreement.configuration.beneficiary != address(0));
 
-        uint256 amount = agreement.totalAmount;
-        uint256 startDate = agreement.startDate;
-        uint256 endDate = agreement.endDate;
+        if (agreement.state == AgreementState.Cancelled) {
+            return agreement.vestedAmountBeforeCancelled;
+        }
+
+        uint256 amount = agreement.configuration.totalAmount;
+        uint256 startDate = agreement.configuration.startDate;
+        uint256 endDate = agreement.configuration.endDate;
 
         uint256 secondsNow = block.timestamp;
 
