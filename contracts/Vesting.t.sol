@@ -54,7 +54,8 @@ contract VestingTest is Test {
         (
             address agreementPayer,
             Vesting.AgreementConfiguration memory agreement,
-            Vesting.AgreementState agreementState
+            Vesting.AgreementState agreementState,
+            uint256 vestedAmountBeforeCancelled
         ) = vesting.agreements(agreementId);
 
         assertEq(agreementPayer, validPayer);
@@ -65,6 +66,7 @@ contract VestingTest is Test {
         assertEq(agreement.endDate, validEndDate);
         assertEq(agreement.revocable, revocable);
         assertEq(uint(agreementState), uint(Vesting.AgreementState.Active));
+        assertEq(vestedAmountBeforeCancelled, 0);
     }
 
     function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer()
@@ -163,7 +165,9 @@ contract VestingTest is Test {
         );
     }
 
-    function test_createAgreement_whenBeneficiaryIsAddress0_thenReverts() public {
+    function test_createAgreement_whenBeneficiaryIsAddress0_thenReverts()
+        public
+    {
         address beneficiary = address(0);
         bool revocable = false;
 
@@ -347,7 +351,7 @@ contract VestingTest is Test {
         vm.prank(validPayer);
         vesting.cancelAgreement(agreementId);
 
-        (, , Vesting.AgreementState agreementState) = vesting.agreements(
+        (, , Vesting.AgreementState agreementState, ) = vesting.agreements(
             agreementId
         );
 
@@ -375,7 +379,9 @@ contract VestingTest is Test {
         vesting.cancelAgreement(1234);
     }
 
-    function test_cancelAgreement_whenAddressCancellingIsNotPayer_thenReverts() public {
+    function test_cancelAgreement_whenAddressCancellingIsNotPayer_thenReverts()
+        public
+    {
         address notPayer = makeAddr("charly");
         bool revocable = true;
         uint256 agreementId = _fundAndCreateAgreement(revocable);
@@ -386,7 +392,9 @@ contract VestingTest is Test {
         vesting.cancelAgreement(agreementId);
     }
 
-    function test_cancelAgreement_whenAgreementExistsButDateIsAfterEnd_thenReverts() public {
+    function test_cancelAgreement_whenAgreementExistsButDateIsAfterEnd_thenReverts()
+        public
+    {
         bool revocable = true;
         uint256 agreementId = _fundAndCreateAgreement(revocable);
 
@@ -394,6 +402,38 @@ contract VestingTest is Test {
         vm.prank(validPayer);
         vm.expectRevert();
         vesting.cancelAgreement(agreementId);
+    }
+
+    function testFuzz_cancelAgreement_whenAgreementExists_thenTheVestedAmountIsCalculated(
+        uint256 amount,
+        uint32 startDateFuzzed,
+        uint32 elapsedFuzzed,
+        uint32 durationFuzzed
+    ) public {
+        amount = bound(amount, 1, 1e30);
+        uint256 duration = bound(durationFuzzed, 1, type(uint32).max);
+        uint256 elapsed = bound(elapsedFuzzed, 0, duration - 1);
+        uint256 startDate = uint256(startDateFuzzed);
+        uint256 endDate = startDate + duration;
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            endDate,
+            revocable
+        );
+
+        uint256 expectedVestedAmount = (amount * (elapsed)) / (duration);
+
+        vm.warp(startDate + elapsed);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        (, , , uint256 vestedAmountBeforeCancelled) = vesting.agreements(
+            agreementId
+        );
+
+        assertEq(expectedVestedAmount, vestedAmountBeforeCancelled);
     }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
