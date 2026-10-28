@@ -588,6 +588,57 @@ contract CancelAgreementTest is VestingTestBase {
 }
 
 contract ClaimAmountTest is VestingTestBase {
+    function test_claimAmountFrom_whenRequestingZeroBeforeStart_revertsWithInvalidAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.expectRevert(Vesting.InvalidAmount.selector);
+
+        _claimAsBeneficiary(agreementId, 0);
+    }
+
+    function test_claimAmountFrom_whenRequestingZeroAfterTotalWithdrawal_revertsWithInvalidAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+        _claimAsBeneficiary(agreementId, AMOUNT);
+        vm.expectRevert(Vesting.InvalidAmount.selector);
+
+        _claimAsBeneficiary(agreementId, 0);
+    }
+
+    function test_claimAmountFrom_whenRequestingZeroAfterCancelledEntitlementIsExhausted_revertsWithInvalidAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        _claimAsBeneficiary(agreementId, 500);
+        vm.expectRevert(Vesting.InvalidAmount.selector);
+
+        _claimAsBeneficiary(agreementId, 0);
+    }
+
+    function test_claimAmountFrom_whenRequestingZeroAfterCurrentlyVestedTokensAreClaimed_revertsWithInvalidAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        _claimAsBeneficiary(agreementId, 500);
+        vm.expectRevert(Vesting.InvalidAmount.selector);
+
+        _claimAsBeneficiary(agreementId, 0);
+    }
+
+    function test_claimAmountFrom_whenRequestingZeroWithAvailableBalance_revertsWithInvalidAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        vm.expectRevert(Vesting.InvalidAmount.selector);
+
+        _claimAsBeneficiary(agreementId, 0);
+    }
+
     function test_claimAmountFrom_whenTotalAmountIsClaimedAtEnd_marksAgreementCompleted()
         public
     {
