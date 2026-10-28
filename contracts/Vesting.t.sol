@@ -131,11 +131,45 @@ contract CreateAgreementTest is VestingTestBase {
         assertEq(token.balanceOf(address(vesting)), AMOUNT);
     }
 
-    function test_createAgreement_whenConfigurationIsValid_emitsAgreementId()
+    function test_createAgreement_whenConfigurationIsValid_emitsAgreementDetails()
         public
     {
         vm.expectEmit(address(vesting));
-        emit Vesting.AgreementCreated(0);
+        emit Vesting.AgreementCreated(
+            0,
+            payer,
+            beneficiary,
+            address(token),
+            AMOUNT,
+            START_DATE,
+            END_DATE,
+            false
+        );
+
+        _createAgreement();
+    }
+
+    function test_createAgreement_whenRevocableAgreementFollowsAnother_emitsItsOwnDetails()
+        public
+    {
+        _createAgreement();
+        configuration.beneficiary = outsider;
+        configuration.totalAmount = 2_000;
+        configuration.startDate = END_DATE;
+        configuration.endDate = END_DATE + 1 days;
+        configuration.revocable = true;
+        _fundAndApprove(2_000);
+        vm.expectEmit(address(vesting));
+        emit Vesting.AgreementCreated(
+            1,
+            payer,
+            outsider,
+            address(token),
+            2_000,
+            END_DATE,
+            END_DATE + 1 days,
+            true
+        );
 
         _createAgreement();
     }
@@ -174,21 +208,21 @@ contract CreateAgreementTest is VestingTestBase {
         public
     {
         configuration.beneficiary = address(0);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InvalidBeneficiary.selector);
 
         _createAgreement();
     }
 
     function test_createAgreement_whenAmountIsZero_reverts() public {
         configuration.totalAmount = 0;
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InvalidAmount.selector);
 
         _createAgreement();
     }
 
     function test_createAgreement_whenStartDateIsAfterEndDate_reverts() public {
         configuration.startDate = END_DATE + 1 days;
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InvalidDateRange.selector);
 
         _createAgreement();
     }
@@ -298,7 +332,7 @@ contract VestedAmountTest is VestingTestBase {
     }
 
     function test_vestedAmountOf_whenAgreementDoesNotExist_reverts() public {
-        vm.expectRevert();
+        vm.expectRevert(Vesting.AgreementNotFound.selector);
 
         vesting.vestedAmountOf(UNKNOWN_AGREEMENT_ID);
     }
@@ -339,13 +373,13 @@ contract CancelAgreementTest is VestingTestBase {
         configuration.revocable = false;
         uint256 agreementId = _givenAgreement();
         vm.warp(START_DATE);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.AgreementNotRevocable.selector);
 
         _cancelAsPayer(agreementId);
     }
 
     function test_cancelAgreement_whenAgreementDoesNotExist_reverts() public {
-        vm.expectRevert();
+        vm.expectRevert(Vesting.AgreementNotRevocable.selector);
 
         _cancelAsPayer(UNKNOWN_AGREEMENT_ID);
     }
@@ -354,7 +388,7 @@ contract CancelAgreementTest is VestingTestBase {
         uint256 agreementId = _givenAgreement();
         vm.warp(START_DATE);
         vm.prank(outsider);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.UnauthorizedPayer.selector);
 
         vesting.cancelAgreement(agreementId);
     }
@@ -362,7 +396,7 @@ contract CancelAgreementTest is VestingTestBase {
     function test_cancelAgreement_whenAfterEnd_reverts() public {
         uint256 agreementId = _givenAgreement();
         vm.warp(END_DATE + 1 days);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.AgreementEnded.selector);
 
         _cancelAsPayer(agreementId);
     }
@@ -471,7 +505,7 @@ contract ClaimAmountTest is VestingTestBase {
         uint256 agreementId = _givenAgreement();
         vm.warp(MIDPOINT);
         vm.prank(outsider);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.UnauthorizedBeneficiary.selector);
 
         vesting.claimAmountFrom(agreementId, 1);
     }
@@ -505,7 +539,7 @@ contract ClaimAmountTest is VestingTestBase {
     {
         uint256 agreementId = _givenAgreement();
         vm.warp(MIDPOINT);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InsufficientVestedAmount.selector);
 
         _claimAsBeneficiary(agreementId, 501);
     }
@@ -528,7 +562,7 @@ contract ClaimAmountTest is VestingTestBase {
         uint256 agreementId = _givenAgreementCancelledAtMidpoint();
         vm.warp(END_DATE + 1 days);
         _claimAsBeneficiary(agreementId, 500);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InsufficientVestedAmount.selector);
 
         _claimAsBeneficiary(agreementId, 1);
     }
@@ -536,7 +570,7 @@ contract ClaimAmountTest is VestingTestBase {
     function test_claimAmountFrom_whenNothingHasVested_reverts() public {
         uint256 agreementId = _givenAgreement();
         vm.warp(START_DATE);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InsufficientVestedAmount.selector);
 
         _claimAsBeneficiary(agreementId, 1);
     }
@@ -558,7 +592,7 @@ contract ClaimAmountTest is VestingTestBase {
         uint256 agreementId = _givenAgreement();
         vm.warp(END_DATE);
         _claimAsBeneficiary(agreementId, AMOUNT);
-        vm.expectRevert();
+        vm.expectRevert(Vesting.InsufficientVestedAmount.selector);
 
         _claimAsBeneficiary(agreementId, 1);
     }

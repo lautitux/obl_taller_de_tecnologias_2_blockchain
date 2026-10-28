@@ -29,7 +29,26 @@ contract Vesting {
         uint256 alreadyWithdrawnAmount;
     }
 
-    event AgreementCreated(uint256 indexed id);
+    error InvalidBeneficiary();
+    error InvalidAmount();
+    error InvalidDateRange();
+    error AgreementNotRevocable();
+    error UnauthorizedPayer();
+    error AgreementEnded();
+    error UnauthorizedBeneficiary();
+    error InsufficientVestedAmount();
+    error AgreementNotFound();
+
+    event AgreementCreated(
+        uint256 indexed agreementId,
+        address indexed payer,
+        address indexed beneficiary,
+        address token,
+        uint256 totalAmount,
+        uint256 startDate,
+        uint256 endDate,
+        bool revocable
+    );
     event AgreementWithdrawal(
         uint256 indexed id,
         address indexed beneficiary,
@@ -42,9 +61,9 @@ contract Vesting {
     function createAgreement(
         AgreementConfiguration calldata config
     ) external returns (uint256) {
-        require(config.beneficiary != address(0));
-        require(config.totalAmount != 0);
-        require(config.endDate > config.startDate);
+        require(config.beneficiary != address(0), InvalidBeneficiary());
+        require(config.totalAmount != 0, InvalidAmount());
+        require(config.endDate > config.startDate, InvalidDateRange());
 
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement({
@@ -61,7 +80,16 @@ contract Vesting {
             config.totalAmount
         );
 
-        emit AgreementCreated(agreementId);
+        emit AgreementCreated(
+            agreementId,
+            msg.sender,
+            config.beneficiary,
+            address(config.token),
+            config.totalAmount,
+            config.startDate,
+            config.endDate,
+            config.revocable
+        );
         return agreementId;
     }
 
@@ -76,11 +104,11 @@ contract Vesting {
 
         uint256 secondsNow = block.timestamp;
 
-        require(agreement.configuration.revocable);
-        require(agreement.payer == msg.sender);
+        require(agreement.configuration.revocable, AgreementNotRevocable());
+        require(agreement.payer == msg.sender, UnauthorizedPayer());
         // Cancelling may only be done before the end date.
         // forge-lint: disable-next-line(block-timestamp)
-        require(secondsNow < endDate);
+        require(secondsNow < endDate, AgreementEnded());
 
         uint256 vestedAmount = calculateVestedAmount(
             amount,
@@ -112,7 +140,7 @@ contract Vesting {
 
         uint256 secondsNow = block.timestamp;
 
-        require(beneficiary == msg.sender);
+        require(beneficiary == msg.sender, UnauthorizedBeneficiary());
 
         uint256 vestedAmount;
         if (state == AgreementState.Cancelled) {
@@ -128,7 +156,10 @@ contract Vesting {
         uint256 amountAvailableForWithdrawal =
             vestedAmount - alreadyWithdrawnAmount;
 
-        require(claimAmount <= amountAvailableForWithdrawal);
+        require(
+            claimAmount <= amountAvailableForWithdrawal,
+            InsufficientVestedAmount()
+        );
 
         agreement.alreadyWithdrawnAmount += claimAmount;
 
@@ -139,7 +170,10 @@ contract Vesting {
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
         Agreement storage agreement = agreements[agreementId];
-        require(agreement.configuration.beneficiary != address(0));
+        require(
+            agreement.configuration.beneficiary != address(0),
+            AgreementNotFound()
+        );
 
         if (agreement.state == AgreementState.Cancelled) {
             return agreement.vestedAmountBeforeCancelled;
