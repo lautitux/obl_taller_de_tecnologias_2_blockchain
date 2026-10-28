@@ -355,6 +355,55 @@ contract CancelAgreementTest is VestingTestBase {
         configuration.revocable = true;
     }
 
+    function test_cancelAgreement_whenAlreadyCancelled_revertsWithAgreementNotActive()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.expectRevert(Vesting.AgreementNotActive.selector);
+
+        _cancelAsPayer(agreementId);
+    }
+
+    function test_cancelAgreement_whenCancelledAndTimeAdvances_preservesFrozenEntitlement()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.warp(MIDPOINT + 12 hours);
+        vm.expectRevert(Vesting.AgreementNotActive.selector);
+
+        _cancelAsPayer(agreementId);
+
+        (, , , uint256 vestedAtCancellation, ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(vestedAtCancellation, 500);
+        assertEq(vesting.vestedAmountOf(agreementId), 500);
+    }
+
+    function test_cancelAgreement_whenOtherAgreementsHoldTokens_preservesTheirFundsOnRepeatedCancellation()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        _givenAgreement();
+        vm.expectRevert(Vesting.AgreementNotActive.selector);
+
+        _cancelAsPayer(agreementId);
+
+        assertEq(token.balanceOf(payer), 500);
+        assertEq(token.balanceOf(address(vesting)), 1_500);
+    }
+
+    function test_cancelAgreement_whenAgreementIsCompleted_revertsWithAgreementNotActive()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+        _claimAsBeneficiary(agreementId, AMOUNT);
+        vm.expectRevert(Vesting.AgreementNotActive.selector);
+
+        _cancelAsPayer(agreementId);
+    }
+
     function test_cancelAgreement_whenAtMidpoint_emitsCancellationDetails()
         public
     {
