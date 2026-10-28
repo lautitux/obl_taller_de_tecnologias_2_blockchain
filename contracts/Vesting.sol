@@ -155,6 +155,7 @@ contract Vesting {
         Agreement storage agreement = agreements[agreementId];
         address beneficiary = agreement.configuration.beneficiary;
         require(beneficiary != address(0), AgreementNotFound());
+        require(claimAmount != 0, InvalidAmount());
 
         IERC20 token = agreement.configuration.token;
         uint256 amount = agreement.configuration.totalAmount;
