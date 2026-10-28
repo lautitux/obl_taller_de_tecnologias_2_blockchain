@@ -460,6 +460,19 @@ contract VestingTest is Test {
         assertEq(vestedAmountAfterCancellation, vestedAmountAtCancellation);
     }
 
+    function test_claimAmountFrom_whenClaimantIsNotBeneficiary_thenRejects()
+        public
+    {
+        uint256 amount = 1_000;
+        uint256 agreementId = _fundAndCreateAgreement(amount, validStartDate, validEndDate);
+        address notBeneficiary = makeAddr("charly");
+
+        vm.warp(validStartDate + (validEndDate - validStartDate) / 2);
+        vm.prank(notBeneficiary);
+        vm.expectRevert();
+        vesting.claimAmountFrom(agreementId, 1);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
