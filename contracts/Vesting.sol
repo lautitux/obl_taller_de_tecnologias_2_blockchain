@@ -54,6 +54,14 @@ contract Vesting {
         address indexed beneficiary,
         uint256 amount
     );
+    event AgreementCancelled(
+        uint256 indexed agreementId,
+        address indexed payer,
+        address indexed beneficiary,
+        address token,
+        uint256 vestedAmount,
+        uint256 refundedAmount
+    );
 
     mapping(uint256 => Agreement) public agreements;
     uint256 private nextAgreementId = 0;
@@ -126,6 +134,15 @@ contract Vesting {
         agreement.vestedAmountBeforeCancelled = vestedAmount;
 
         token.safeTransfer(payer, unvestedAmount);
+
+        emit AgreementCancelled(
+            agreementId,
+            payer,
+            agreement.configuration.beneficiary,
+            address(token),
+            vestedAmount,
+            unvestedAmount
+        );
     }
 
     function claimAmountFrom(
@@ -134,10 +151,7 @@ contract Vesting {
     ) external {
         Agreement storage agreement = agreements[agreementId];
         address beneficiary = agreement.configuration.beneficiary;
-        require(
-            beneficiary != address(0),
-            AgreementNotFound()
-        );
+        require(beneficiary != address(0), AgreementNotFound());
 
         IERC20 token = agreement.configuration.token;
         uint256 amount = agreement.configuration.totalAmount;
