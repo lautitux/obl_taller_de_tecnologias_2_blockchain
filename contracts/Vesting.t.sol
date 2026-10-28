@@ -576,6 +576,27 @@ contract VestingTest is Test {
         vesting.claimAmountFrom(agreementId, 1);
     }
 
+    function test_claimAmountFrom_whenWithdrawalSucceeds_thenEmitsEvent()
+        public
+    {
+        uint256 agreementId = _fundAndCreateAgreement(
+            validAmount,
+            validStartDate,
+            validEndDate
+        );
+
+        vm.warp(validEndDate);
+        vm.expectEmit(address(vesting));
+        emit Vesting.AgreementWithdrawal(
+            agreementId,
+            validBeneficiary,
+            validAmount
+        );
+
+        vm.prank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, validAmount);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
