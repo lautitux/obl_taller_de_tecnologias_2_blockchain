@@ -93,8 +93,17 @@ contract Vesting {
         Agreement storage agreement = agreements[agreementId];
 
         address beneficiary = agreement.configuration.beneficiary;
+        IERC20 token = agreement.configuration.token;
+        uint256 amount = agreement.configuration.totalAmount;
+        uint256 startDate = agreement.configuration.startDate;
+        uint256 endDate = agreement.configuration.endDate;
+
+        uint256 secondsNow = block.timestamp;
 
         require(beneficiary == msg.sender);
+
+        uint256 vestedAmount = calculateVestedAmount(amount, startDate, endDate, secondsNow);
+        token.safeTransfer(beneficiary, vestedAmount);
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
