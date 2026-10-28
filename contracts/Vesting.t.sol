@@ -355,6 +355,42 @@ contract CancelAgreementTest is VestingTestBase {
         configuration.revocable = true;
     }
 
+    function test_cancelAgreement_whenAtMidpoint_emitsCancellationDetails()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        vm.expectEmit(address(vesting));
+        emit Vesting.AgreementCancelled(
+            agreementId,
+            payer,
+            beneficiary,
+            address(token),
+            500,
+            500
+        );
+
+        _cancelAsPayer(agreementId);
+    }
+
+    function test_cancelAgreement_whenBeforeStart_emitsFullRefundForCancelledAgreement()
+        public
+    {
+        _givenAgreement();
+        uint256 agreementId = _givenAgreement();
+        vm.expectEmit(address(vesting));
+        emit Vesting.AgreementCancelled(
+            agreementId,
+            payer,
+            beneficiary,
+            address(token),
+            0,
+            AMOUNT
+        );
+
+        _cancelAsPayer(agreementId);
+    }
+
     function test_cancelAgreement_whenAgreementIsRevocable_marksAgreementCancelled()
         public
     {
