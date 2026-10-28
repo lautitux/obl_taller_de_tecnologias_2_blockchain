@@ -57,7 +57,8 @@ contract VestingTest is Test {
             address agreementPayer,
             Vesting.AgreementConfiguration memory agreement,
             Vesting.AgreementState agreementState,
-            uint256 vestedAmountBeforeCancelled
+            uint256 vestedAmountBeforeCancelled,
+            uint256 alreadyWithdrawnAmount
         ) = vesting.agreements(agreementId);
 
         assertEq(agreementPayer, validPayer);
@@ -69,6 +70,7 @@ contract VestingTest is Test {
         assertEq(agreement.revocable, revocable);
         assertEq(uint(agreementState), uint(Vesting.AgreementState.Active));
         assertEq(vestedAmountBeforeCancelled, 0);
+        assertEq(alreadyWithdrawnAmount, 0);
     }
 
     function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer()
@@ -353,7 +355,7 @@ contract VestingTest is Test {
         vm.prank(validPayer);
         vesting.cancelAgreement(agreementId);
 
-        (, , Vesting.AgreementState agreementState, ) = vesting.agreements(
+        (, , Vesting.AgreementState agreementState, , ) = vesting.agreements(
             agreementId
         );
 
@@ -431,7 +433,7 @@ contract VestingTest is Test {
         vm.prank(validPayer);
         vesting.cancelAgreement(agreementId);
 
-        (, , , uint256 vestedAmountBeforeCancelled) = vesting.agreements(
+        (, , , uint256 vestedAmountBeforeCancelled, ) = vesting.agreements(
             agreementId
         );
 

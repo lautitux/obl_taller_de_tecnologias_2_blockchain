@@ -26,6 +26,7 @@ contract Vesting {
         AgreementConfiguration configuration;
         AgreementState state;
         uint256 vestedAmountBeforeCancelled;
+        uint256 alreadyWithdrawnAmount;
     }
 
     event AgreementCreated(uint256 indexed id);
@@ -50,7 +51,8 @@ contract Vesting {
             payer: msg.sender,
             configuration: config,
             state: AgreementState.Active,
-            vestedAmountBeforeCancelled: 0
+            vestedAmountBeforeCancelled: 0,
+            alreadyWithdrawnAmount: 0
         });
 
         config.token.safeTransferFrom(
@@ -96,7 +98,7 @@ contract Vesting {
 
     function claimAmountFrom(
         uint256 agreementId,
-        uint256 amountClaim
+        uint256 claimAmount
     ) external {
         Agreement storage agreement = agreements[agreementId];
 
@@ -105,6 +107,7 @@ contract Vesting {
         uint256 amount = agreement.configuration.totalAmount;
         uint256 startDate = agreement.configuration.startDate;
         uint256 endDate = agreement.configuration.endDate;
+        uint256 alreadyWithdrawnAmount = agreement.alreadyWithdrawnAmount;
 
         uint256 secondsNow = block.timestamp;
 
@@ -116,12 +119,16 @@ contract Vesting {
             endDate,
             secondsNow
         );
+        uint256 amountAvailableForWithdrawal =
+            vestedAmount - alreadyWithdrawnAmount;
 
-        require(amountClaim <= vestedAmount);
+        require(claimAmount <= amountAvailableForWithdrawal);
 
-        token.safeTransfer(beneficiary, amountClaim);
+        agreement.alreadyWithdrawnAmount += claimAmount;
 
-        emit AgreementWithdrawal(agreementId, beneficiary, amountClaim);
+        token.safeTransfer(beneficiary, claimAmount);
+
+        emit AgreementWithdrawal(agreementId, beneficiary, claimAmount);
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
