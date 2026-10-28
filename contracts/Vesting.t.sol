@@ -29,6 +29,8 @@ contract VestingTest is Test {
         vesting = new Vesting();
         token = new MockToken();
 
+        token.mint(address(vesting), 1_000_000);
+
         validPayer = makeAddr("alice");
         validBeneficiary = makeAddr("bob");
         validStartDate = block.timestamp + 1 days;
@@ -524,6 +526,9 @@ contract VestingTest is Test {
     function test_cancelAgreement_whenCalledBeforeStart_returnsEntireUnvestedBalanceToPayer()
         public
     {
+        uint256 contractBalanceBeforeAgreement = token.balanceOf(
+            address(vesting)
+        );
         bool revocable = true;
         uint256 agreementId = _fundAndCreateAgreement(revocable);
         uint256 payerBalanceBeforeCancellation = token.balanceOf(validPayer);
@@ -536,7 +541,10 @@ contract VestingTest is Test {
             token.balanceOf(validPayer),
             payerBalanceBeforeCancellation + validAmount
         );
-        assertEq(token.balanceOf(address(vesting)), 0);
+        assertEq(
+            token.balanceOf(address(vesting)),
+            contractBalanceBeforeAgreement
+        );
     }
 
     function testFuzz_cancelAgreement_whenCalledBeforeEnd_returnsUnvestedBalanceToPayer(
@@ -549,6 +557,9 @@ contract VestingTest is Test {
         uint256 elapsed = bound(elapsedFuzzed, 0, duration - 1);
         uint256 startDate = today;
         uint256 endDate = startDate + duration;
+        uint256 contractBalanceBeforeAgreement = token.balanceOf(
+            address(vesting)
+        );
         uint256 agreementId = _fundAndCreateAgreement(
             amount,
             startDate,
@@ -567,7 +578,10 @@ contract VestingTest is Test {
             token.balanceOf(validPayer),
             payerBalanceBeforeCancellation + expectedUnvestedAmount
         );
-        assertEq(token.balanceOf(address(vesting)), expectedVestedAmount);
+        assertEq(
+            token.balanceOf(address(vesting)),
+            contractBalanceBeforeAgreement + expectedVestedAmount
+        );
     }
 
     function test_claimAmountFrom_whenAmountExceedsVestedAmount_thenReverts()
@@ -619,6 +633,24 @@ contract VestingTest is Test {
 
         vm.prank(validBeneficiary);
         vesting.claimAmountFrom(agreementId, validAmount);
+    }
+
+    function test_claimAmountFrom_whenAmountWasAlreadyClaimed_thenReverts()
+        public
+    {
+        uint256 agreementId = _fundAndCreateAgreement(
+            validAmount,
+            validStartDate,
+            validEndDate
+        );
+
+        vm.warp(validEndDate);
+        vm.startPrank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, validAmount);
+
+        vm.expectRevert();
+        vesting.claimAmountFrom(agreementId, 1);
+        vm.stopPrank();
     }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
