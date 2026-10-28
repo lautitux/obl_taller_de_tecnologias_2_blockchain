@@ -107,18 +107,24 @@ contract Vesting {
         uint256 amount = agreement.configuration.totalAmount;
         uint256 startDate = agreement.configuration.startDate;
         uint256 endDate = agreement.configuration.endDate;
+        AgreementState state = agreement.state;
         uint256 alreadyWithdrawnAmount = agreement.alreadyWithdrawnAmount;
 
         uint256 secondsNow = block.timestamp;
 
         require(beneficiary == msg.sender);
 
-        uint256 vestedAmount = calculateVestedAmount(
-            amount,
-            startDate,
-            endDate,
-            secondsNow
-        );
+        uint256 vestedAmount;
+        if (state == AgreementState.Cancelled) {
+            vestedAmount = agreement.vestedAmountBeforeCancelled;
+        } else {
+            vestedAmount = calculateVestedAmount(
+                amount,
+                startDate,
+                endDate,
+                secondsNow
+            );
+        }
         uint256 amountAvailableForWithdrawal =
             vestedAmount - alreadyWithdrawnAmount;
 
