@@ -9,7 +9,8 @@ contract Vesting {
 
     enum AgreementState {
         Active,
-        Cancelled
+        Cancelled,
+        Completed
     }
 
     struct AgreementConfiguration {
@@ -184,6 +185,15 @@ contract Vesting {
         );
 
         agreement.alreadyWithdrawnAmount += claimAmount;
+
+        if (
+            state == AgreementState.Active &&
+            // forge-lint: disable-next-line(block-timestamp)
+            secondsNow >= endDate &&
+            agreement.alreadyWithdrawnAmount == amount
+        ) {
+            agreement.state = AgreementState.Completed;
+        }
 
         token.safeTransfer(beneficiary, claimAmount);
 
