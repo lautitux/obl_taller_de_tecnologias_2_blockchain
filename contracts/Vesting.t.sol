@@ -561,6 +561,21 @@ contract VestingTest is Test {
         vesting.claimAmountFrom(agreementId, validAmount / 2 + 1);
     }
 
+    function test_claimAmountFrom_whenNoBalanceIsAvailable_thenReverts()
+        public
+    {
+        uint256 agreementId = _fundAndCreateAgreement(
+            validAmount,
+            validStartDate,
+            validEndDate
+        );
+
+        vm.warp(validStartDate);
+        vm.prank(validBeneficiary);
+        vm.expectRevert();
+        vesting.claimAmountFrom(agreementId, 1);
+    }
+
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
 
