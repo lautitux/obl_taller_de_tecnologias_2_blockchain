@@ -497,6 +497,30 @@ contract VestingTest is Test {
             beneficiaryBalanceBefore + validAmount
         );
     }
+
+    function test_claimAmountFrom_whenRequestedAmountIsAvailable_thenTransfersRequestedAmount()
+        public
+    {
+        uint256 agreementId = _fundAndCreateAgreement(
+            validAmount,
+            validStartDate,
+            validEndDate
+        );
+        uint256 requestedAmount = validAmount / 5;
+
+        vm.warp(validEndDate);
+        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
+
+        vm.prank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, requestedAmount);
+
+        uint256 beneficiaryBalanceAfter = token.balanceOf(validBeneficiary);
+        assertEq(
+            beneficiaryBalanceAfter - beneficiaryBalanceBefore,
+            requestedAmount
+        );
+    }
+
     function test_cancelAgreement_whenCalledBeforeStart_returnsEntireUnvestedBalanceToPayer()
         public
     {
