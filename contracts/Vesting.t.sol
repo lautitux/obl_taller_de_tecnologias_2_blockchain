@@ -102,7 +102,7 @@ contract VestingTest is Test {
 
         _fundAndApprove(validPayer, validAmount);
 
-        vm.expectEmit();
+        vm.expectEmit(address(vesting));
         emit Vesting.AgreementCreated(0);
 
         _createAgreement(
@@ -464,13 +464,38 @@ contract VestingTest is Test {
         public
     {
         uint256 amount = 1_000;
-        uint256 agreementId = _fundAndCreateAgreement(amount, validStartDate, validEndDate);
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            validStartDate,
+            validEndDate
+        );
         address notBeneficiary = makeAddr("charly");
 
         vm.warp(validStartDate + (validEndDate - validStartDate) / 2);
         vm.prank(notBeneficiary);
         vm.expectRevert();
         vesting.claimAmountFrom(agreementId, 1);
+    }
+
+    function test_claimAmountFrom_whenClaimantIsBeneficiary_thenTransfersVestedAmount()
+        public
+    {
+        uint256 agreementId = _fundAndCreateAgreement(
+            validAmount,
+            validStartDate,
+            validEndDate
+        );
+
+        vm.warp(validEndDate);
+        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
+
+        vm.prank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, validAmount);
+
+        assertEq(
+            token.balanceOf(validBeneficiary),
+            beneficiaryBalanceBefore + validAmount
+        );
     }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
