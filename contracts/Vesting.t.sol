@@ -601,6 +601,52 @@ contract VestingTest is Test {
         vesting.claimAmountFrom(agreementId, validAmount / 2 + 1);
     }
 
+    function test_claimAmountFrom_whenAgreementWasCancelled_thenTransfersAmountVestedAtCancellation()
+        public
+    {
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 cancellationDate =
+            validStartDate + (validEndDate - validStartDate) / 2;
+        uint256 vestedAtCancellation = validAmount / 2;
+
+        vm.warp(cancellationDate);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        vm.warp(validEndDate + 1 days);
+        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
+
+        vm.prank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, vestedAtCancellation);
+
+        assertEq(
+            token.balanceOf(validBeneficiary) - beneficiaryBalanceBefore,
+            vestedAtCancellation
+        );
+    }
+
+    function test_claimAmountFrom_whenAgreementWasCancelled_thenCannotClaimAmountVestedAfterCancellation()
+        public
+    {
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 cancellationDate =
+            validStartDate + (validEndDate - validStartDate) / 2;
+
+        vm.warp(cancellationDate);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        vm.warp(validEndDate + 1 days);
+        vm.startPrank(validBeneficiary);
+        vesting.claimAmountFrom(agreementId, validAmount / 2);
+
+        vm.expectRevert();
+        vesting.claimAmountFrom(agreementId, 1);
+        vm.stopPrank();
+    }
+
     function test_claimAmountFrom_whenNoBalanceIsAvailable_thenReverts()
         public
     {
