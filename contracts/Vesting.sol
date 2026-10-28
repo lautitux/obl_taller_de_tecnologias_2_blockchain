@@ -82,6 +82,14 @@ contract Vesting {
         );
     }
 
+    function claimAmountFrom(uint256 agreementId, uint256 amount) external {
+        Agreement storage agreement = agreements[agreementId];
+
+        address beneficiary = agreement.configuration.beneficiary;
+
+        require(beneficiary == msg.sender);
+    }
+
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
         Agreement storage agreement = agreements[agreementId];
         require(agreement.configuration.beneficiary != address(0));
