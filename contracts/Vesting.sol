@@ -89,7 +89,10 @@ contract Vesting {
         token.safeTransfer(payer, unvestedAmount);
     }
 
-    function claimAmountFrom(uint256 agreementId, uint256 amount) external {
+    function claimAmountFrom(
+        uint256 agreementId,
+        uint256 amountClaim
+    ) external {
         Agreement storage agreement = agreements[agreementId];
 
         address beneficiary = agreement.configuration.beneficiary;
@@ -102,7 +105,15 @@ contract Vesting {
 
         require(beneficiary == msg.sender);
 
-        uint256 vestedAmount = calculateVestedAmount(amount, startDate, endDate, secondsNow);
+        uint256 vestedAmount = calculateVestedAmount(
+            amount,
+            startDate,
+            endDate,
+            secondsNow
+        );
+
+        require(amountClaim <= vestedAmount);
+
         token.safeTransfer(beneficiary, vestedAmount);
     }
 
