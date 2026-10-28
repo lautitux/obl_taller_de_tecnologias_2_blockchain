@@ -39,6 +39,7 @@ contract Vesting {
     error UnauthorizedBeneficiary();
     error InsufficientVestedAmount();
     error AgreementNotFound();
+    error AgreementNotActive();
 
     event AgreementCreated(
         uint256 indexed agreementId,
@@ -108,6 +109,7 @@ contract Vesting {
             agreement.configuration.beneficiary != address(0),
             AgreementNotFound()
         );
+        require(agreement.state == AgreementState.Active, AgreementNotActive());
 
         address payer = agreement.payer;
         IERC20 token = agreement.configuration.token;
