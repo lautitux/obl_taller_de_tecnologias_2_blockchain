@@ -29,6 +29,11 @@ contract Vesting {
     }
 
     event AgreementCreated(uint256 indexed id);
+    event AgreementWithdrawal(
+        uint256 indexed id,
+        address indexed beneficiary,
+        uint256 amount
+    );
 
     mapping(uint256 => Agreement) public agreements;
     uint256 private nextAgreementId = 0;
@@ -115,6 +120,8 @@ contract Vesting {
         require(amountClaim <= vestedAmount);
 
         token.safeTransfer(beneficiary, vestedAmount);
+
+        emit AgreementWithdrawal(agreementId, beneficiary, amountClaim);
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
