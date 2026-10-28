@@ -539,6 +539,105 @@ contract CancelAgreementTest is VestingTestBase {
 }
 
 contract ClaimAmountTest is VestingTestBase {
+    function test_claimAmountFrom_whenTotalAmountIsClaimedAtEnd_marksAgreementCompleted()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+
+        _claimAsBeneficiary(agreementId, AMOUNT);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Completed));
+    }
+
+    function test_claimAmountFrom_whenTotalAmountIsClaimedAfterEnd_marksAgreementCompleted()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE + 1 days);
+
+        _claimAsBeneficiary(agreementId, AMOUNT);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Completed));
+    }
+
+    function test_claimAmountFrom_whenRemainingAmountIsClaimedAtEnd_marksAgreementCompleted()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        _claimAsBeneficiary(agreementId, 200);
+        vm.warp(END_DATE);
+
+        _claimAsBeneficiary(agreementId, 800);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Completed));
+    }
+
+    function test_claimAmountFrom_whenOnlyPartialAmountIsClaimedAtEnd_keepsAgreementActive()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+
+        _claimAsBeneficiary(agreementId, 200);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Active));
+    }
+
+    function test_claimAmountFrom_whenAllCurrentlyVestedTokensAreClaimedBeforeEnd_keepsAgreementActive()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+
+        _claimAsBeneficiary(agreementId, 500);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Active));
+    }
+
+    function test_claimAmountFrom_whenCancelledEntitlementIsClaimedAfterEnd_keepsAgreementCancelled()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.warp(END_DATE + 1 days);
+
+        _claimAsBeneficiary(agreementId, 500);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Cancelled));
+    }
+
+    function test_agreements_whenPeriodEndedWithoutWithdrawals_keepsAgreementActive()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
+            agreementId
+        );
+
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Active));
+    }
+
     function test_claimAmountFrom_whenAgreementDoesNotExist_revertsWithAgreementNotFound()
         public
     {
