@@ -119,7 +119,7 @@ contract Vesting {
 
         require(amountClaim <= vestedAmount);
 
-        token.safeTransfer(beneficiary, vestedAmount);
+        token.safeTransfer(beneficiary, amountClaim);
 
         emit AgreementWithdrawal(agreementId, beneficiary, amountClaim);
     }
