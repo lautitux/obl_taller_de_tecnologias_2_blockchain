@@ -95,6 +95,10 @@ contract Vesting {
 
     function cancelAgreement(uint256 agreementId) external {
         Agreement storage agreement = agreements[agreementId];
+        require(
+            agreement.configuration.beneficiary != address(0),
+            AgreementNotFound()
+        );
 
         address payer = agreement.payer;
         IERC20 token = agreement.configuration.token;
@@ -129,8 +133,12 @@ contract Vesting {
         uint256 claimAmount
     ) external {
         Agreement storage agreement = agreements[agreementId];
-
         address beneficiary = agreement.configuration.beneficiary;
+        require(
+            beneficiary != address(0),
+            AgreementNotFound()
+        );
+
         IERC20 token = agreement.configuration.token;
         uint256 amount = agreement.configuration.totalAmount;
         uint256 startDate = agreement.configuration.startDate;
