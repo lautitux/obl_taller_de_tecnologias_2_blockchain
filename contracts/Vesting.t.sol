@@ -378,8 +378,10 @@ contract CancelAgreementTest is VestingTestBase {
         _cancelAsPayer(agreementId);
     }
 
-    function test_cancelAgreement_whenAgreementDoesNotExist_reverts() public {
-        vm.expectRevert(Vesting.AgreementNotRevocable.selector);
+    function test_cancelAgreement_whenAgreementDoesNotExist_revertsWithAgreementNotFound()
+        public
+    {
+        vm.expectRevert(Vesting.AgreementNotFound.selector);
 
         _cancelAsPayer(UNKNOWN_AGREEMENT_ID);
     }
@@ -501,6 +503,14 @@ contract CancelAgreementTest is VestingTestBase {
 }
 
 contract ClaimAmountTest is VestingTestBase {
+    function test_claimAmountFrom_whenAgreementDoesNotExist_revertsWithAgreementNotFound()
+        public
+    {
+        vm.expectRevert(Vesting.AgreementNotFound.selector);
+
+        _claimAsBeneficiary(UNKNOWN_AGREEMENT_ID, 1);
+    }
+
     function test_claimAmountFrom_whenCallerIsNotBeneficiary_reverts() public {
         uint256 agreementId = _givenAgreement();
         vm.warp(MIDPOINT);
