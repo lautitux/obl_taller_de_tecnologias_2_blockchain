@@ -5,6 +5,7 @@ import {Vesting} from "./Vesting.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 
 contract MockToken is ERC20 {
     constructor() ERC20("Mock Token", "MOCK") {}
@@ -14,756 +15,551 @@ contract MockToken is ERC20 {
     }
 }
 
-contract VestingTest is Test {
-    Vesting vesting;
-    MockToken token;
+abstract contract VestingTestBase is Test {
+    uint256 internal constant TODAY = 1_792_977_722;
+    uint256 internal constant AMOUNT = 1_000;
+    uint256 internal constant START_DATE = TODAY + 1 days;
+    uint256 internal constant DURATION = 2 days;
+    uint256 internal constant END_DATE = START_DATE + DURATION;
+    uint256 internal constant MIDPOINT = START_DATE + 1 days;
+    uint256 internal constant UNKNOWN_AGREEMENT_ID = 1_234;
 
-    uint256 constant today = 1_792_977_722;
-    address validPayer;
-    address validBeneficiary;
-    uint256 constant validAmount = 1_000;
-    uint256 validStartDate;
-    uint256 validEndDate;
+    Vesting internal vesting;
+    MockToken internal token;
+    address internal payer;
+    address internal beneficiary;
+    address internal outsider;
+    Vesting.AgreementConfiguration internal configuration;
 
-    function setUp() public {
+    function setUp() public virtual {
+        vm.warp(TODAY);
         vesting = new Vesting();
         token = new MockToken();
-
-        token.mint(address(vesting), 1_000_000);
-
-        validPayer = makeAddr("alice");
-        validBeneficiary = makeAddr("bob");
-        validStartDate = block.timestamp + 1 days;
-        validEndDate = validStartDate + 3 days;
+        payer = makeAddr("payer");
+        beneficiary = makeAddr("beneficiary");
+        outsider = makeAddr("outsider");
+        configuration = Vesting.AgreementConfiguration({
+            beneficiary: beneficiary,
+            token: IERC20(address(token)),
+            totalAmount: AMOUNT,
+            startDate: START_DATE,
+            endDate: END_DATE,
+            revocable: false
+        });
     }
 
-    function test_createAgreement_whenArgumentsAreValid_createsAgreement()
+    function _fundAndApprove(uint256 amount) internal {
+        token.mint(payer, amount);
+        vm.prank(payer);
+        token.approve(address(vesting), amount);
+    }
+
+    function _createAgreement() internal returns (uint256) {
+        vm.prank(payer);
+        return vesting.createAgreement(configuration);
+    }
+
+    function _givenAgreement() internal returns (uint256) {
+        _fundAndApprove(configuration.totalAmount);
+        return _createAgreement();
+    }
+
+    function _cancelAsPayer(uint256 agreementId) internal {
+        vm.prank(payer);
+        vesting.cancelAgreement(agreementId);
+    }
+
+    function _claimAsBeneficiary(uint256 agreementId, uint256 amount) internal {
+        vm.prank(beneficiary);
+        vesting.claimAmountFrom(agreementId, amount);
+    }
+
+    function _givenAgreementCancelledAtMidpoint() internal returns (uint256) {
+        configuration.revocable = true;
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        _cancelAsPayer(agreementId);
+        return agreementId;
+    }
+}
+
+contract CreateAgreementTest is VestingTestBase {
+    function setUp() public override {
+        super.setUp();
+        _fundAndApprove(AMOUNT);
+    }
+
+    function test_createAgreement_whenConfigurationIsValid_storesConfiguration()
         public
     {
-        bool revocable = false;
+        uint256 agreementId = _createAgreement();
 
-        _fundAndApprove(validPayer, validAmount);
+        (, Vesting.AgreementConfiguration memory stored, , , ) = vesting
+            .agreements(agreementId);
+        assertEq(stored.beneficiary, beneficiary);
+        assertEq(address(stored.token), address(token));
+        assertEq(stored.totalAmount, AMOUNT);
+        assertEq(stored.startDate, START_DATE);
+        assertEq(stored.endDate, END_DATE);
+        assertFalse(stored.revocable);
+    }
 
-        uint256 agreementId = _createAgreement(
-            validPayer,
-            validBeneficiary,
-            validAmount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
+    function test_createAgreement_whenConfigurationIsValid_initializesActiveAgreement()
+        public
+    {
+        uint256 agreementId = _createAgreement();
 
         (
-            address agreementPayer,
-            Vesting.AgreementConfiguration memory agreement,
-            Vesting.AgreementState agreementState,
-            uint256 vestedAmountBeforeCancelled,
-            uint256 alreadyWithdrawnAmount
+            address storedPayer,
+            ,
+            Vesting.AgreementState state,
+            uint256 vestedAtCancellation,
+            uint256 withdrawn
         ) = vesting.agreements(agreementId);
-
-        assertEq(agreementPayer, validPayer);
-        assertEq(agreement.beneficiary, validBeneficiary);
-        assertEq(address(agreement.token), address(token));
-        assertEq(agreement.totalAmount, validAmount);
-        assertEq(agreement.startDate, validStartDate);
-        assertEq(agreement.endDate, validEndDate);
-        assertEq(agreement.revocable, revocable);
-        assertEq(uint(agreementState), uint(Vesting.AgreementState.Active));
-        assertEq(vestedAmountBeforeCancelled, 0);
-        assertEq(alreadyWithdrawnAmount, 0);
+        assertEq(storedPayer, payer);
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Active));
+        assertEq(vestedAtCancellation, 0);
+        assertEq(withdrawn, 0);
     }
 
-    function test_createAgreement_whenArgumentsAreValid_witholdsAmountFromPayer()
+    function test_createAgreement_whenConfigurationIsValid_transfersTokensFromPayer()
         public
     {
-        bool revocable = false;
+        _createAgreement();
 
-        _fundAndApprove(validPayer, validAmount);
-
-        uint256 payerBalanceBefore = token.balanceOf(validPayer);
-        uint256 vestingBalanceBefore = token.balanceOf(address(vesting));
-
-        _createAgreement(
-            validPayer,
-            validBeneficiary,
-            validAmount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
-
-        assertEq(token.balanceOf(validPayer), payerBalanceBefore - validAmount);
-        assertEq(
-            token.balanceOf(address(vesting)),
-            vestingBalanceBefore + validAmount
-        );
+        assertEq(token.balanceOf(payer), 0);
+        assertEq(token.balanceOf(address(vesting)), AMOUNT);
     }
 
-    function test_createAgreement_whenArgumentsAreValid_emitsEventWithAgreementId()
+    function test_createAgreement_whenConfigurationIsValid_emitsAgreementId()
         public
     {
-        bool revocable = false;
-
-        _fundAndApprove(validPayer, validAmount);
-
         vm.expectEmit(address(vesting));
         emit Vesting.AgreementCreated(0);
 
-        _createAgreement(
-            validPayer,
-            validBeneficiary,
-            validAmount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
+        _createAgreement();
     }
 
-    function testFuzz_createMultipleAgreements_returnsDifferentIds(
+    function testFuzz_createAgreement_whenCreatingMultipleAgreements_returnsUniqueIds(
         uint8 count,
         uint64 amount
     ) public {
         count = uint8(bound(count, 1, 255));
-        amount = uint64(bound(amount, 1, type(uint64).max));
+        configuration.totalAmount = bound(amount, 1, type(uint64).max);
+        _fundAndApprove(uint256(count) * configuration.totalAmount);
 
-        uint256 total = uint256(count) * uint256(amount);
-        _fundAndApprove(validPayer, total);
+        uint256[] memory ids = _createAgreements(count);
 
-        uint256[] memory ids = new uint256[](count);
+        _assertUniqueIds(ids);
+    }
 
-        for (uint8 i; i < count; ++i) {
-            uint256 id = _createAgreement(
-                validPayer,
-                validBeneficiary,
-                amount,
-                validStartDate,
-                validEndDate,
-                false
-            );
+    function test_createAgreement_whenAllowanceIsInsufficient_revertsWithInsufficientAllowance()
+        public
+    {
+        vm.prank(payer);
+        token.approve(address(vesting), 500);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(vesting),
+                500,
+                AMOUNT
+            )
+        );
 
-            for (uint256 j; j < i; ++j) {
-                assertNotEq(id, ids[j], "duplicate agreement ID");
-            }
+        _createAgreement();
+    }
 
-            ids[i] = id;
+    function test_createAgreement_whenBeneficiaryIsZeroAddress_reverts()
+        public
+    {
+        configuration.beneficiary = address(0);
+        vm.expectRevert();
+
+        _createAgreement();
+    }
+
+    function test_createAgreement_whenAmountIsZero_reverts() public {
+        configuration.totalAmount = 0;
+        vm.expectRevert();
+
+        _createAgreement();
+    }
+
+    function test_createAgreement_whenStartDateIsAfterEndDate_reverts() public {
+        configuration.startDate = END_DATE + 1 days;
+        vm.expectRevert();
+
+        _createAgreement();
+    }
+
+    function _createAgreements(
+        uint256 count
+    ) private returns (uint256[] memory ids) {
+        ids = new uint256[](count);
+        for (uint256 i; i < count; ++i) {
+            ids[i] = _createAgreement();
         }
     }
 
-    function test_createAgreement_whenPayerDoesNotApproveEnoughTokens_thenReverts()
-        public
-    {
-        uint256 amount = 1_000;
-        uint256 insufficientAmount = 500;
-        bool revocable = false;
-
-        _fundAndApprove(validPayer, insufficientAmount);
-
-        vm.expectRevert();
-        _createAgreement(
-            validPayer,
-            validBeneficiary,
-            amount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
+    function _assertUniqueIds(uint256[] memory ids) private pure {
+        for (uint256 i; i < ids.length; ++i) {
+            for (uint256 j; j < i; ++j) {
+                assertNotEq(ids[i], ids[j], "duplicate agreement ID");
+            }
+        }
     }
+}
 
-    function test_createAgreement_whenBeneficiaryIsAddress0_thenReverts()
-        public
-    {
-        address beneficiary = address(0);
-        bool revocable = false;
-
-        _fundAndApprove(validPayer, validAmount);
-
-        vm.expectRevert();
-        _createAgreement(
-            validPayer,
-            beneficiary,
-            validAmount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
-    }
-
-    function test_createAgreement_whenAmountIs0_thenReverts() public {
-        uint256 amount = 0;
-        bool revocable = false;
-
-        _fundAndApprove(validPayer, validAmount);
-
-        vm.expectRevert();
-        _createAgreement(
-            validPayer,
-            validBeneficiary,
-            amount,
-            validStartDate,
-            validEndDate,
-            revocable
-        );
-    }
-
-    function test_createAgreement_whenStartDateIsBeforeEndDate_thenReverts()
-        public
-    {
-        uint256 startDate = block.timestamp + 2 days;
-        uint256 endDate = startDate - 1 days;
-        bool revocable = false;
-
-        _fundAndApprove(validPayer, validAmount);
-
-        vm.expectRevert();
-        _createAgreement(
-            validPayer,
-            validBeneficiary,
-            validAmount,
-            startDate,
-            endDate,
-            revocable
-        );
-    }
-
-    function test_vestedAmountOf_whenAgreementExistsAndDateIsBeforeStart_returns0()
-        public
-    {
-        vm.warp(today);
-
-        uint256 amount = 1_000;
-        uint256 startDate = today + 1 days;
-        uint256 endDate = startDate + 2 days;
-
-        uint256 agreementId = _fundAndCreateAgreement(
-            amount,
-            startDate,
-            endDate
-        );
+contract VestedAmountTest is VestingTestBase {
+    function test_vestedAmountOf_whenBeforeStart_returnsZero() public {
+        uint256 agreementId = _givenAgreement();
 
         uint256 vested = vesting.vestedAmountOf(agreementId);
 
         assertEq(vested, 0);
     }
 
-    function test_vestedAmountOf_whenAgreementExistsAndDateIsAfterEnd_returnsTotalAmount()
-        public
-    {
-        vm.warp(today);
+    function test_vestedAmountOf_whenAtStart_returnsZero() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE);
 
-        uint256 amount = 1_000;
-        uint256 startDate = today + 1 days;
-        uint256 endDate = startDate + 2 days;
-
-        uint256 agreementId = _fundAndCreateAgreement(
-            amount,
-            startDate,
-            endDate
-        );
-
-        vm.warp(endDate + 1 days);
         uint256 vested = vesting.vestedAmountOf(agreementId);
 
-        assertEq(vested, amount);
+        assertEq(vested, 0);
     }
 
-    function test_vestedAmountOf_whenAgreementExists_returnsVestedAmount()
+    function test_vestedAmountOf_whenOneHourHasElapsed_returnsTwentyTokens()
         public
     {
-        vm.warp(today);
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE + 1 hours);
 
-        uint256 amount = 1_000;
-        uint256 startDate = today + 1 days;
-        uint256 endDate = startDate + 2 days;
+        uint256 vested = vesting.vestedAmountOf(agreementId);
 
-        uint256 agreementId = _fundAndCreateAgreement(
-            amount,
-            startDate,
-            endDate
-        );
-
-        uint256[5] memory checkpoints = [
-            startDate,
-            startDate + 1 hours,
-            startDate + 12 hours,
-            startDate + 1 days,
-            endDate
-        ];
-
-        uint256[5] memory expected = [
-            0,
-            (amount * 1 hours) / 2 days,
-            (amount * 12 hours) / 2 days,
-            amount / 2,
-            amount
-        ];
-
-        uint256[] memory actual = new uint256[](expected.length);
-
-        for (uint256 i; i < checkpoints.length; i++) {
-            vm.warp(checkpoints[i]);
-            actual[i] = vesting.vestedAmountOf(agreementId);
-        }
-
-        for (uint256 i; i < checkpoints.length; i++) {
-            assertEq(actual[i], expected[i]);
-        }
+        // 1,000 tokens over 48 hours: one hour vests 20 whole tokens.
+        assertEq(vested, 20);
     }
 
-    function testFuzz_vestedAmountOf_whenAgreementExists_roundsDownCorrectly(
+    function test_vestedAmountOf_whenTwelveHoursHaveElapsed_returnsQuarterOfAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE + 12 hours);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, 250);
+    }
+
+    function test_vestedAmountOf_whenAtMidpoint_returnsHalfOfAmount() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, 500);
+    }
+
+    function test_vestedAmountOf_whenAtEnd_returnsTotalAmount() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, AMOUNT);
+    }
+
+    function test_vestedAmountOf_whenAfterEnd_returnsTotalAmount() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE + 1 days);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        assertEq(vested, AMOUNT);
+    }
+
+    function testFuzz_vestedAmountOf_whenDuringVesting_roundsDownToNearestWholeToken(
         uint256 amount,
         uint32 elapsed
     ) public {
-        vm.warp(today);
-        amount = bound(amount, 1, 1e30);
-        uint256 startDate = today;
-        uint256 duration = 2 days;
-        elapsed = uint32(bound(elapsed, 0, duration));
-
-        uint256 agreementId = _fundAndCreateAgreement(
-            amount,
-            startDate,
-            startDate + duration
-        );
-
-        vm.warp(startDate + elapsed);
+        configuration.totalAmount = bound(amount, 1, 1e30);
+        elapsed = uint32(bound(elapsed, 0, DURATION));
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE + elapsed);
+        uint256 proportionalAmount = configuration.totalAmount * elapsed;
 
         uint256 vested = vesting.vestedAmountOf(agreementId);
-        uint256 expected = (amount * elapsed) / duration;
 
-        assertEq(vested, expected);
-        assertLe(vested, amount);
-
-        if (elapsed < duration) {
-            assertLt(vested, amount);
-        }
+        // The exact entitlement lies between vested and the next whole token.
+        assertLe(vested * DURATION, proportionalAmount);
+        assertLt(proportionalAmount, (vested + 1) * DURATION);
+        assertLe(vested, configuration.totalAmount);
     }
 
-    function test_vestedAmountOf_whenAgreementIsNonExistant_thenReverts()
-        public
-    {
+    function test_vestedAmountOf_whenAgreementDoesNotExist_reverts() public {
         vm.expectRevert();
-        vesting.vestedAmountOf(1234);
+
+        vesting.vestedAmountOf(UNKNOWN_AGREEMENT_ID);
     }
 
-    function test_cancelAgreement_whenAgreementExistsAndIsRevocable_thenCancels()
+    function test_vestedAmountOf_whenCancelledAtMidpoint_stopsAccruingTokens()
         public
     {
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.warp(END_DATE);
 
-        vm.warp(validStartDate);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
+        uint256 vested = vesting.vestedAmountOf(agreementId);
 
-        (, , Vesting.AgreementState agreementState, , ) = vesting.agreements(
+        assertEq(vested, 500);
+    }
+}
+
+contract CancelAgreementTest is VestingTestBase {
+    function setUp() public override {
+        super.setUp();
+        configuration.revocable = true;
+    }
+
+    function test_cancelAgreement_whenAgreementIsRevocable_marksAgreementCancelled()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE);
+
+        _cancelAsPayer(agreementId);
+
+        (, , Vesting.AgreementState state, , ) = vesting.agreements(
             agreementId
         );
-
-        assertEq(uint(agreementState), uint(Vesting.AgreementState.Cancelled));
+        assertEq(uint256(state), uint256(Vesting.AgreementState.Cancelled));
     }
 
-    function test_cancelAgreement_whenAgreementExistsButIsNotRevocable_thenReverts()
-        public
-    {
-        bool revocable = false;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-
-        vm.warp(validStartDate);
-        vm.prank(validPayer);
+    function test_cancelAgreement_whenAgreementIsIrrevocable_reverts() public {
+        configuration.revocable = false;
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE);
         vm.expectRevert();
+
+        _cancelAsPayer(agreementId);
+    }
+
+    function test_cancelAgreement_whenAgreementDoesNotExist_reverts() public {
+        vm.expectRevert();
+
+        _cancelAsPayer(UNKNOWN_AGREEMENT_ID);
+    }
+
+    function test_cancelAgreement_whenCallerIsNotPayer_reverts() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE);
+        vm.prank(outsider);
+        vm.expectRevert();
+
         vesting.cancelAgreement(agreementId);
     }
 
-    function test_cancelAgreement_whenAgreementIsNonExistant_thenReverts()
-        public
-    {
-        vm.warp(validStartDate);
-        vm.prank(validPayer);
+    function test_cancelAgreement_whenAfterEnd_reverts() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE + 1 days);
         vm.expectRevert();
-        vesting.cancelAgreement(1234);
+
+        _cancelAsPayer(agreementId);
     }
 
-    function test_cancelAgreement_whenAddressCancellingIsNotPayer_thenReverts()
+    function test_cancelAgreement_whenAtMidpoint_recordsHalfOfAmountAsVested()
         public
     {
-        address notPayer = makeAddr("charly");
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
 
-        vm.warp(validStartDate);
-        vm.prank(notPayer);
-        vm.expectRevert();
-        vesting.cancelAgreement(agreementId);
+        _cancelAsPayer(agreementId);
+
+        (, , , uint256 vestedAtCancellation, ) = vesting.agreements(
+            agreementId
+        );
+        assertEq(vestedAtCancellation, 500);
     }
 
-    function test_cancelAgreement_whenAgreementExistsButDateIsAfterEnd_thenReverts()
-        public
-    {
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-
-        vm.warp(validEndDate + 1 days);
-        vm.prank(validPayer);
-        vm.expectRevert();
-        vesting.cancelAgreement(agreementId);
-    }
-
-    function testFuzz_cancelAgreement_whenAgreementExists_thenTheVestedAmountIsCalculated(
+    function testFuzz_cancelAgreement_whenDuringVesting_preservesAccruedEntitlement(
         uint256 amount,
-        uint32 startDateFuzzed,
-        uint32 elapsedFuzzed,
-        uint32 durationFuzzed
+        uint32 startDate,
+        uint32 elapsedSeed,
+        uint32 durationSeed
     ) public {
-        amount = bound(amount, 1, 1e30);
-        uint256 duration = bound(durationFuzzed, 1, type(uint32).max);
-        uint256 elapsed = bound(elapsedFuzzed, 0, duration - 1);
-        uint256 startDate = uint256(startDateFuzzed);
-        uint256 endDate = startDate + duration;
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(
+        uint256 elapsed = _arrangeFuzzedSchedule(
             amount,
             startDate,
-            endDate,
-            revocable
+            elapsedSeed,
+            durationSeed
         );
+        uint256 agreementId = _givenAgreement();
+        vm.warp(configuration.startDate + elapsed);
+        uint256 vestedBeforeCancellation = vesting.vestedAmountOf(agreementId);
 
-        uint256 expectedVestedAmount = (amount * (elapsed)) / (duration);
+        _cancelAsPayer(agreementId);
 
-        vm.warp(startDate + elapsed);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
-
-        (, , , uint256 vestedAmountBeforeCancelled, ) = vesting.agreements(
+        (, , , uint256 vestedAtCancellation, ) = vesting.agreements(
             agreementId
         );
-
-        assertEq(expectedVestedAmount, vestedAmountBeforeCancelled);
+        assertEq(vestedAtCancellation, vestedBeforeCancellation);
     }
 
-    function test_cancelAgreement_whenAgreementIsCancelled_doesNotAccumulateNewVestedAmount()
+    function test_cancelAgreement_whenBeforeStart_returnsEntireAmountToPayer()
         public
     {
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-        uint256 cancellationDate = validStartDate + 1 days;
+        uint256 agreementId = _givenAgreement();
 
-        vm.warp(cancellationDate);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
+        _cancelAsPayer(agreementId);
 
-        uint256 vestedAmountAtCancellation = vesting.vestedAmountOf(
-            agreementId
-        );
-
-        vm.warp(validEndDate);
-
-        uint256 vestedAmountAfterCancellation = vesting.vestedAmountOf(
-            agreementId
-        );
-
-        assertEq(vestedAmountAfterCancellation, vestedAmountAtCancellation);
+        assertEq(token.balanceOf(payer), AMOUNT);
+        assertEq(token.balanceOf(address(vesting)), 0);
     }
 
-    function test_claimAmountFrom_whenClaimantIsNotBeneficiary_thenRejects()
+    function test_cancelAgreement_whenAtMidpoint_returnsUnvestedHalfToPayer()
         public
     {
-        uint256 amount = 1_000;
-        uint256 agreementId = _fundAndCreateAgreement(
-            amount,
-            validStartDate,
-            validEndDate
-        );
-        address notBeneficiary = makeAddr("charly");
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
 
-        vm.warp(validStartDate + (validEndDate - validStartDate) / 2);
-        vm.prank(notBeneficiary);
-        vm.expectRevert();
-        vesting.claimAmountFrom(agreementId, 1);
+        _cancelAsPayer(agreementId);
+
+        assertEq(token.balanceOf(payer), 500);
+        assertEq(token.balanceOf(address(vesting)), 500);
     }
 
-    function test_claimAmountFrom_whenClaimantIsBeneficiary_thenTransfersVestedAmount()
-        public
-    {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
-
-        vm.warp(validEndDate);
-        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
-
-        vm.prank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, validAmount);
-
-        assertEq(
-            token.balanceOf(validBeneficiary),
-            beneficiaryBalanceBefore + validAmount
-        );
-    }
-
-    function test_claimAmountFrom_whenRequestedAmountIsAvailable_thenTransfersRequestedAmount()
-        public
-    {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
-        uint256 requestedAmount = validAmount / 5;
-
-        vm.warp(validEndDate);
-        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
-
-        vm.prank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, requestedAmount);
-
-        uint256 beneficiaryBalanceAfter = token.balanceOf(validBeneficiary);
-        assertEq(
-            beneficiaryBalanceAfter - beneficiaryBalanceBefore,
-            requestedAmount
-        );
-    }
-
-    function test_cancelAgreement_whenCalledBeforeStart_returnsEntireUnvestedBalanceToPayer()
-        public
-    {
-        uint256 contractBalanceBeforeAgreement = token.balanceOf(
-            address(vesting)
-        );
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-        uint256 payerBalanceBeforeCancellation = token.balanceOf(validPayer);
-
-        vm.warp(validStartDate - 1);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
-
-        assertEq(
-            token.balanceOf(validPayer),
-            payerBalanceBeforeCancellation + validAmount
-        );
-        assertEq(
-            token.balanceOf(address(vesting)),
-            contractBalanceBeforeAgreement
-        );
-    }
-
-    function testFuzz_cancelAgreement_whenCalledBeforeEnd_returnsUnvestedBalanceToPayer(
+    function testFuzz_cancelAgreement_whenBeforeEnd_refundsOnlyUnvestedTokens(
         uint256 amount,
-        uint32 durationFuzzed,
-        uint32 elapsedFuzzed
+        uint32 durationSeed,
+        uint32 elapsedSeed
     ) public {
-        amount = bound(amount, 1, 1e30);
-        uint256 duration = bound(durationFuzzed, 1, type(uint32).max);
-        uint256 elapsed = bound(elapsedFuzzed, 0, duration - 1);
-        uint256 startDate = today;
-        uint256 endDate = startDate + duration;
-        uint256 contractBalanceBeforeAgreement = token.balanceOf(
-            address(vesting)
-        );
-        uint256 agreementId = _fundAndCreateAgreement(
+        uint256 elapsed = _arrangeFuzzedSchedule(
             amount,
-            startDate,
-            endDate,
-            true
+            uint32(START_DATE),
+            elapsedSeed,
+            durationSeed
         );
-        uint256 payerBalanceBeforeCancellation = token.balanceOf(validPayer);
-        uint256 expectedVestedAmount = (amount * elapsed) / duration;
-        uint256 expectedUnvestedAmount = amount - expectedVestedAmount;
+        uint256 agreementId = _givenAgreement();
+        vm.warp(configuration.startDate + elapsed);
+        uint256 vestedBeforeCancellation = vesting.vestedAmountOf(agreementId);
 
-        vm.warp(startDate + elapsed);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
+        _cancelAsPayer(agreementId);
 
+        assertEq(token.balanceOf(address(vesting)), vestedBeforeCancellation);
         assertEq(
-            token.balanceOf(validPayer),
-            payerBalanceBeforeCancellation + expectedUnvestedAmount
-        );
-        assertEq(
-            token.balanceOf(address(vesting)),
-            contractBalanceBeforeAgreement + expectedVestedAmount
+            token.balanceOf(payer) + vestedBeforeCancellation,
+            configuration.totalAmount
         );
     }
 
-    function test_claimAmountFrom_whenAmountExceedsVestedAmount_thenReverts()
-        public
-    {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
-        vm.warp(validStartDate + (validEndDate - validStartDate) / 2);
+    function _arrangeFuzzedSchedule(
+        uint256 amount,
+        uint32 startDate,
+        uint32 elapsedSeed,
+        uint32 durationSeed
+    ) private returns (uint256 elapsed) {
+        configuration.totalAmount = bound(amount, 1, 1e30);
+        configuration.startDate = startDate;
+        uint256 duration = bound(durationSeed, 1, type(uint32).max);
+        configuration.endDate = uint256(startDate) + duration;
+        return bound(elapsedSeed, 0, duration - 1);
+    }
+}
 
-        vm.prank(validBeneficiary);
+contract ClaimAmountTest is VestingTestBase {
+    function test_claimAmountFrom_whenCallerIsNotBeneficiary_reverts() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        vm.prank(outsider);
         vm.expectRevert();
-        vesting.claimAmountFrom(agreementId, validAmount / 2 + 1);
-    }
 
-    function test_claimAmountFrom_whenAgreementWasCancelled_thenTransfersAmountVestedAtCancellation()
-        public
-    {
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-        uint256 cancellationDate =
-            validStartDate + (validEndDate - validStartDate) / 2;
-        uint256 vestedAtCancellation = validAmount / 2;
-
-        vm.warp(cancellationDate);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
-
-        vm.warp(validEndDate + 1 days);
-        uint256 beneficiaryBalanceBefore = token.balanceOf(validBeneficiary);
-
-        vm.prank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, vestedAtCancellation);
-
-        assertEq(
-            token.balanceOf(validBeneficiary) - beneficiaryBalanceBefore,
-            vestedAtCancellation
-        );
-    }
-
-    function test_claimAmountFrom_whenAgreementWasCancelled_thenCannotClaimAmountVestedAfterCancellation()
-        public
-    {
-        bool revocable = true;
-        uint256 agreementId = _fundAndCreateAgreement(revocable);
-        uint256 cancellationDate =
-            validStartDate + (validEndDate - validStartDate) / 2;
-
-        vm.warp(cancellationDate);
-        vm.prank(validPayer);
-        vesting.cancelAgreement(agreementId);
-
-        vm.warp(validEndDate + 1 days);
-        vm.startPrank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, validAmount / 2);
-
-        vm.expectRevert();
-        vesting.claimAmountFrom(agreementId, 1);
-        vm.stopPrank();
-    }
-
-    function test_claimAmountFrom_whenNoBalanceIsAvailable_thenReverts()
-        public
-    {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
-
-        vm.warp(validStartDate);
-        vm.prank(validBeneficiary);
-        vm.expectRevert();
         vesting.claimAmountFrom(agreementId, 1);
     }
 
-    function test_claimAmountFrom_whenWithdrawalSucceeds_thenEmitsEvent()
+    function test_claimAmountFrom_whenFullyVested_transfersTotalAmount()
         public
     {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
 
-        vm.warp(validEndDate);
+        _claimAsBeneficiary(agreementId, AMOUNT);
+
+        assertEq(token.balanceOf(beneficiary), AMOUNT);
+        assertEq(token.balanceOf(address(vesting)), 0);
+    }
+
+    function test_claimAmountFrom_whenRequestingPartialAmount_transfersRequestedAmount()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+
+        _claimAsBeneficiary(agreementId, 200);
+
+        assertEq(token.balanceOf(beneficiary), 200);
+        assertEq(token.balanceOf(address(vesting)), 800);
+    }
+
+    function test_claimAmountFrom_whenAmountExceedsVestedEntitlement_reverts()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+        vm.expectRevert();
+
+        _claimAsBeneficiary(agreementId, 501);
+    }
+
+    function test_claimAmountFrom_whenCancelledAtMidpoint_transfersFrozenEntitlement()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.warp(END_DATE + 1 days);
+
+        _claimAsBeneficiary(agreementId, 500);
+
+        assertEq(token.balanceOf(beneficiary), 500);
+        assertEq(token.balanceOf(address(vesting)), 0);
+    }
+
+    function test_claimAmountFrom_whenCancelledEntitlementIsExhausted_reverts()
+        public
+    {
+        uint256 agreementId = _givenAgreementCancelledAtMidpoint();
+        vm.warp(END_DATE + 1 days);
+        _claimAsBeneficiary(agreementId, 500);
+        vm.expectRevert();
+
+        _claimAsBeneficiary(agreementId, 1);
+    }
+
+    function test_claimAmountFrom_whenNothingHasVested_reverts() public {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(START_DATE);
+        vm.expectRevert();
+
+        _claimAsBeneficiary(agreementId, 1);
+    }
+
+    function test_claimAmountFrom_whenWithdrawalSucceeds_emitsWithdrawalDetails()
+        public
+    {
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
         vm.expectEmit(address(vesting));
-        emit Vesting.AgreementWithdrawal(
-            agreementId,
-            validBeneficiary,
-            validAmount
-        );
+        emit Vesting.AgreementWithdrawal(agreementId, beneficiary, AMOUNT);
 
-        vm.prank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, validAmount);
+        _claimAsBeneficiary(agreementId, AMOUNT);
     }
 
-    function test_claimAmountFrom_whenAmountWasAlreadyClaimed_thenReverts()
+    function test_claimAmountFrom_whenTotalAmountWasAlreadyClaimed_reverts()
         public
     {
-        uint256 agreementId = _fundAndCreateAgreement(
-            validAmount,
-            validStartDate,
-            validEndDate
-        );
-
-        vm.warp(validEndDate);
-        vm.startPrank(validBeneficiary);
-        vesting.claimAmountFrom(agreementId, validAmount);
-
+        uint256 agreementId = _givenAgreement();
+        vm.warp(END_DATE);
+        _claimAsBeneficiary(agreementId, AMOUNT);
         vm.expectRevert();
-        vesting.claimAmountFrom(agreementId, 1);
-        vm.stopPrank();
-    }
 
-    function _fundAndApprove(address payer, uint256 amount) internal {
-        token.mint(payer, amount);
-
-        vm.prank(payer);
-        token.approve(address(vesting), amount);
-    }
-
-    function _fundAndCreateAgreement(
-        uint256 amount,
-        uint256 startDate,
-        uint256 endDate
-    ) internal returns (uint256) {
-        return _fundAndCreateAgreement(amount, startDate, endDate, false);
-    }
-
-    function _fundAndCreateAgreement(
-        bool revocable
-    ) internal returns (uint256) {
-        return
-            _fundAndCreateAgreement(
-                validAmount,
-                validStartDate,
-                validEndDate,
-                revocable
-            );
-    }
-
-    function _fundAndCreateAgreement(
-        uint256 amount,
-        uint256 startDate,
-        uint256 endDate,
-        bool revocable
-    ) internal returns (uint256) {
-        _fundAndApprove(validPayer, amount);
-        uint256 id = _createAgreement(
-            validPayer,
-            validBeneficiary,
-            amount,
-            startDate,
-            endDate,
-            revocable
-        );
-        return id;
-    }
-
-    function _createAgreement(
-        address payer,
-        address beneficiary,
-        uint256 amount,
-        uint256 startDate,
-        uint256 endDate,
-        bool revocable
-    ) internal returns (uint256) {
-        Vesting.AgreementConfiguration memory configuration = Vesting
-            .AgreementConfiguration({
-                beneficiary: beneficiary,
-                token: IERC20(address(token)),
-                totalAmount: amount,
-                startDate: startDate,
-                endDate: endDate,
-                revocable: revocable
-            });
-        vm.prank(payer);
-        return vesting.createAgreement(configuration);
+        _claimAsBeneficiary(agreementId, 1);
     }
 }
