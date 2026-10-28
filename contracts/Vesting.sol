@@ -61,6 +61,8 @@ contract Vesting {
     function cancelAgreement(uint256 agreementId) external {
         Agreement storage agreement = agreements[agreementId];
 
+        address payer = agreement.payer;
+        IERC20 token = agreement.configuration.token;
         uint256 amount = agreement.configuration.totalAmount;
         uint256 startDate = agreement.configuration.startDate;
         uint256 endDate = agreement.configuration.endDate;
@@ -73,13 +75,18 @@ contract Vesting {
         // forge-lint: disable-next-line(block-timestamp)
         require(secondsNow < endDate);
 
-        agreement.state = AgreementState.Cancelled;
-        agreement.vestedAmountBeforeCancelled = calculateVestedAmount(
+        uint256 vestedAmount = calculateVestedAmount(
             amount,
             startDate,
             endDate,
             secondsNow
         );
+        uint256 unvestedAmount = amount - vestedAmount;
+
+        agreement.state = AgreementState.Cancelled;
+        agreement.vestedAmountBeforeCancelled = vestedAmount;
+
+        token.safeTransfer(payer, unvestedAmount);
     }
 
     function claimAmountFrom(uint256 agreementId, uint256 amount) external {

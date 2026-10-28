@@ -497,6 +497,54 @@ contract VestingTest is Test {
             beneficiaryBalanceBefore + validAmount
         );
     }
+    function test_cancelAgreement_whenCalledBeforeStart_returnsEntireUnvestedBalanceToPayer()
+        public
+    {
+        bool revocable = true;
+        uint256 agreementId = _fundAndCreateAgreement(revocable);
+        uint256 payerBalanceBeforeCancellation = token.balanceOf(validPayer);
+
+        vm.warp(validStartDate - 1);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        assertEq(
+            token.balanceOf(validPayer),
+            payerBalanceBeforeCancellation + validAmount
+        );
+        assertEq(token.balanceOf(address(vesting)), 0);
+    }
+
+    function testFuzz_cancelAgreement_whenCalledBeforeEnd_returnsUnvestedBalanceToPayer(
+        uint256 amount,
+        uint32 durationFuzzed,
+        uint32 elapsedFuzzed
+    ) public {
+        amount = bound(amount, 1, 1e30);
+        uint256 duration = bound(durationFuzzed, 1, type(uint32).max);
+        uint256 elapsed = bound(elapsedFuzzed, 0, duration - 1);
+        uint256 startDate = today;
+        uint256 endDate = startDate + duration;
+        uint256 agreementId = _fundAndCreateAgreement(
+            amount,
+            startDate,
+            endDate,
+            true
+        );
+        uint256 payerBalanceBeforeCancellation = token.balanceOf(validPayer);
+        uint256 expectedVestedAmount = (amount * elapsed) / duration;
+        uint256 expectedUnvestedAmount = amount - expectedVestedAmount;
+
+        vm.warp(startDate + elapsed);
+        vm.prank(validPayer);
+        vesting.cancelAgreement(agreementId);
+
+        assertEq(
+            token.balanceOf(validPayer),
+            payerBalanceBeforeCancellation + expectedUnvestedAmount
+        );
+        assertEq(token.balanceOf(address(vesting)), expectedVestedAmount);
+    }
 
     function _fundAndApprove(address payer, uint256 amount) internal {
         token.mint(payer, amount);
