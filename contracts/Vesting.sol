@@ -8,18 +8,24 @@ contract Vesting {
     using SafeERC20 for IERC20;
 
     enum AgreementState {
-        Active
+        Active,
+        Cancelled
     }
 
-    struct Agreement {
-        address payer;
+    struct AgreementConfiguration {
         address beneficiary;
         IERC20 token;
         uint256 totalAmount;
         uint256 startDate;
         uint256 endDate;
         bool revocable;
+    }
+
+    struct Agreement {
+        address payer;
+        AgreementConfiguration configuration;
         AgreementState state;
+        uint256 vestedAmountBeforeCancelled;
     }
 
     event AgreementCreated(uint256 indexed id);
@@ -28,52 +34,81 @@ contract Vesting {
     uint256 private nextAgreementId = 0;
 
     function createAgreement(
-        address beneficiary,
-        IERC20 token,
-        uint256 totalAmount,
-        uint256 startDate,
-        uint256 endDate,
-        bool revocable
+        AgreementConfiguration calldata config
     ) external returns (uint256) {
-        require(beneficiary != address(0));
-        require(totalAmount != 0);
-        require(endDate > startDate);
+        require(config.beneficiary != address(0));
+        require(config.totalAmount != 0);
+        require(config.endDate > config.startDate);
 
         uint256 agreementId = nextAgreementId++;
         agreements[agreementId] = Agreement({
             payer: msg.sender,
-            beneficiary: beneficiary,
-            token: token,
-            totalAmount: totalAmount,
-            startDate: startDate,
-            endDate: endDate,
-            revocable: revocable,
-            state: AgreementState.Active
+            configuration: config,
+            state: AgreementState.Active,
+            vestedAmountBeforeCancelled: 0
         });
 
-        token.safeTransferFrom(msg.sender, address(this), totalAmount);
+        config.token.safeTransferFrom(
+            msg.sender,
+            address(this),
+            config.totalAmount
+        );
 
         emit AgreementCreated(agreementId);
         return agreementId;
     }
 
-    function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
+    function cancelAgreement(uint256 agreementId) external {
         Agreement storage agreement = agreements[agreementId];
 
-        uint256 amount = agreement.totalAmount;
-        uint256 startDate = agreement.startDate;
-        uint256 endDate = agreement.endDate;
+        uint256 amount = agreement.configuration.totalAmount;
+        uint256 startDate = agreement.configuration.startDate;
+        uint256 endDate = agreement.configuration.endDate;
 
         uint256 secondsNow = block.timestamp;
 
-        // Vesting starts when the block time reaches startDate.
+        require(agreement.configuration.revocable);
+        require(agreement.payer == msg.sender);
+        // Cancelling may only be done before the end date.
         // forge-lint: disable-next-line(block-timestamp)
+        require(secondsNow < endDate);
+
+        agreement.state = AgreementState.Cancelled;
+        agreement.vestedAmountBeforeCancelled = calculateVestedAmount(
+            amount,
+            startDate,
+            endDate,
+            secondsNow
+        );
+    }
+
+    function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
+        Agreement storage agreement = agreements[agreementId];
+        require(agreement.configuration.beneficiary != address(0));
+
+        if (agreement.state == AgreementState.Cancelled) {
+            return agreement.vestedAmountBeforeCancelled;
+        }
+
+        uint256 amount = agreement.configuration.totalAmount;
+        uint256 startDate = agreement.configuration.startDate;
+        uint256 endDate = agreement.configuration.endDate;
+
+        uint256 secondsNow = block.timestamp;
+
+        return calculateVestedAmount(amount, startDate, endDate, secondsNow);
+    }
+
+    function calculateVestedAmount(
+        uint256 amount,
+        uint256 startDate,
+        uint256 endDate,
+        uint256 secondsNow
+    ) internal pure returns (uint256) {
         if (startDate > secondsNow) {
             return 0;
         }
 
-        // The full amount is vested once the block time reaches endDate.
-        // forge-lint: disable-next-line(block-timestamp)
         if (secondsNow >= endDate) {
             return amount;
         }
