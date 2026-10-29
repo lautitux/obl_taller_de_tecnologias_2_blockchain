@@ -4,13 +4,13 @@ test = "test"
 script = "scripts"
 out = "out"
 cache_path = "cache_forge"
-libs = ["node_modules"]
+libs = ["../node_modules", "node_modules"]
 auto_detect_remappings = false
 remappings = [
-    "@nomicfoundation/=node_modules/@nomicfoundation/",
-    "@openzeppelin/=node_modules/@openzeppelin/",
-    "forge-std/=node_modules/forge-std/src/",
-    "hardhat/=node_modules/hardhat/"
+    "@nomicfoundation/=../node_modules/@nomicfoundation/",
+    "@openzeppelin/=../node_modules/@openzeppelin/",
+    "forge-std/=../node_modules/forge-std/src/",
+    "hardhat/=../node_modules/hardhat/"
 ]
 
 [lint]
