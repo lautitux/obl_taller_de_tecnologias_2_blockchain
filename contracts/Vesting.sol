@@ -52,7 +52,7 @@ contract Vesting {
         bool revocable
     );
     event AgreementWithdrawal(
-        uint256 indexed id,
+        uint256 indexed agreementId,
         address indexed beneficiary,
         uint256 amount
     );
