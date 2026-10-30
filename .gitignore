@@ -37,3 +37,6 @@ cache_forge/
 # Local reports and incremental tooling
 lint-reports/
 *.tsbuildinfo
+
+# Hardhat ignition default localhost deployment
+/blockchain/ignition/deployments/chain-31337/
