@@ -3,8 +3,10 @@ import { ref } from 'vue'
 import { RouterView } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppNavigation from '@/components/AppNavigation.vue'
+import { provideSnackbarQueue } from '@/composables/useSnackbar'
 
 const drawerOpen = ref(false)
+const { messages } = provideSnackbarQueue()
 </script>
 
 <template>
@@ -17,5 +19,15 @@ const drawerOpen = ref(false)
         <RouterView />
       </v-container>
     </v-main>
+
+    <v-snackbar-queue
+      v-model="messages"
+      color="info"
+      :timeout="3000"
+      timer="bottom"
+      timer-color="text"
+      closable
+      close-text="Descartar"
+    />
   </v-app>
 </template>

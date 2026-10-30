@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useDisplay } from 'vuetify'
 import WalletConnectButton from '@/components/WalletConnectButton.vue'
+import AccountChip from './AccountChip.vue'
+import NetworkChip from './NetworkChip.vue'
 
 defineProps<{ navigationOpen: boolean }>()
 const emit = defineEmits<{ toggleNavigation: [] }>()
@@ -20,18 +22,16 @@ const { mdAndUp } = useDisplay()
     <v-app-bar-title>Acuerdos</v-app-bar-title>
 
     <template v-if="mdAndUp">
-      <v-chip prepend-icon="mdi-wallet-outline" class="mr-2">Billetera sin conectar</v-chip>
-      <v-chip prepend-icon="mdi-lan-disconnect" class="mr-2">Red no disponible</v-chip>
+      <AccountChip :compact="!mdAndUp" />
+      <NetworkChip :compact="!mdAndUp" />
     </template>
 
     <WalletConnectButton :compact="!mdAndUp" />
 
     <template v-if="!mdAndUp" #extension>
       <v-spacer />
-      <v-chip prepend-icon="mdi-wallet-outline" class="mr-2">Billetera sin conectar</v-chip>
-      <v-spacer />
-      <v-chip prepend-icon="mdi-lan-disconnect" class="mr-2">Red no disponible</v-chip>
-      <v-spacer />
+      <AccountChip :compact="!mdAndUp" />
+      <NetworkChip :compact="!mdAndUp" />
     </template>
   </v-app-bar>
 </template>

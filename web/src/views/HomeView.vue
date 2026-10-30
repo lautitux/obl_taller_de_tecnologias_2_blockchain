@@ -35,8 +35,8 @@ const sections = [
     </header>
 
     <v-alert type="info" title="Estamos preparando tu espacio" class="mb-6">
-      La conexión de billetera y las operaciones estarán disponibles próximamente. Mientras tanto,
-      conocé qué podrás hacer en cada sección.
+      Las operaciones estarán disponibles próximamente. Mientras tanto, conocé qué podrás hacer en
+      cada sección.
     </v-alert>
 
     <section aria-labelledby="sections-title">
