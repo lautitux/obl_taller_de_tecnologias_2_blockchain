@@ -1,4 +1,11 @@
 {
+  "include": [
+    "hardhat.config.ts",
+    "ignition/**/*.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts",
+    "artifacts/**/*.d.ts"
+  ],
   "compilerOptions": {
     "lib": ["es2023"],
     "module": "node20",

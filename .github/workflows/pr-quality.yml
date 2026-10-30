@@ -63,23 +63,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node .github/scripts/clean-coverage.mjs
+      - run: npm run coverage:clean
       - name: Solidity tests
         id: solidity
         continue-on-error: true
         run: |
-          mkdir -p coverage
-          npm run test:solidity -- --coverage 2>&1 | tee coverage/solidity-tests.log
+          mkdir -p blockchain/coverage
+          npm run test:solidity -- --coverage 2>&1 | tee blockchain/coverage/solidity-tests.log
       - name: Enforce 100% Solidity line coverage
         id: coverage
         continue-on-error: true
         # Hardhat replaces build-info when switching coverage instrumentation.
         # Rebuild normally so the checker can reconcile uninstrumented ASTs.
-        run: npm run build && npm run coverage:check
+        run: npm run build:blockchain && npm run coverage:check
       - name: TypeScript tests (do not contribute to coverage)
         id: typescript
         continue-on-error: true
-        run: npm run test:typescript 2>&1 | tee coverage/typescript-tests.log
+        run: npm run test:typescript 2>&1 | tee blockchain/coverage/typescript-tests.log
       - name: Require all test stages to pass
         env:
           SOLIDITY: ${{ steps.solidity.outcome }}
@@ -93,12 +93,12 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: solidity-coverage
-          path: coverage/
+          path: blockchain/coverage/
           if-no-files-found: ignore
           retention-days: 14
 
   lint:
-    name: Solidity lint
+    name: Solidity and web lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -117,12 +117,15 @@ jobs:
       - name: Lint production Solidity
         run: |
           mkdir -p lint-reports
-          npm run lint:sol 2>&1 | tee lint-reports/forge-lint.log
+          npm run lint:blockchain 2>&1 | tee lint-reports/forge-lint.log
+      - name: Lint web
+        if: ${{ !cancelled() && hashFiles('node_modules/.package-lock.json') != '' }}
+        run: npm run lint:web
       - name: Informational and gas findings
         if: ${{ !cancelled() && hashFiles('node_modules/.package-lock.json') != '' }}
         run: |
           mkdir -p lint-reports
-          npm run lint:sol:advisory 2>&1 | tee lint-reports/forge-advisory.log
+          npm run lint:advisory:blockchain 2>&1 | tee lint-reports/forge-advisory.log
       - name: Lint summary
         if: ${{ always() }}
         run: |
@@ -155,7 +158,7 @@ jobs:
             const pr = context.payload.pull_request;
             const marker = '<!-- pr-quality-summary -->';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const names = { formatting: 'Formatting', types: 'Build and types', tests: 'Tests and coverage', lint: 'Solidity lint' };
+            const names = { formatting: 'Formatting', types: 'Build and types', tests: 'Tests and coverage', lint: 'Solidity and web lint' };
             const rawCoverage = results.tests.outputs.coverage || '';
             const coverage = /^\d+\/\d+ lines \(\d+\.\d+%\)$/.test(rawCoverage) ? rawCoverage : 'Unavailable; see test logs';
             const body = [marker, '## PR quality results', '',

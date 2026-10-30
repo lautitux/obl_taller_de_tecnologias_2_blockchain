@@ -1,0 +1,29 @@
+{
+  "name": "@obligatorio/blockchain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "hardhat node",
+    "build": "hardhat build",
+    "typecheck": "npm run build && tsc --noEmit",
+    "test": "hardhat test",
+    "test:solidity": "hardhat test solidity",
+    "test:typescript": "hardhat test nodejs",
+    "test:coverage": "npm run coverage:clean && hardhat test solidity --coverage && npm run build && npm run coverage:check",
+    "coverage:clean": "node ../.github/scripts/clean-coverage.mjs",
+    "coverage:check": "node ../.github/scripts/check-coverage.mjs",
+    "lint": "forge lint --deny warnings",
+    "lint:advisory": "forge lint --severity info gas"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition": "^3.1.9",
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
+    "@openzeppelin/contracts": "^5.6.1",
+    "@types/node": "^24.13.4",
+    "forge-std": "github:foundry-rs/forge-std#v1.16.2",
+    "hardhat": "^3.21.0",
+    "typescript": "~6.0.3",
+    "viem": "^2.57.11"
+  }
+}
