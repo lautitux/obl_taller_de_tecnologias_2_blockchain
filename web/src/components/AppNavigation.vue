@@ -13,7 +13,12 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   { title: 'Inicio', icon: 'mdi-home-outline', to: { name: 'home' }, disabled: false },
-  { title: 'Crear acuerdo', icon: 'mdi-file-document-plus-outline', disabled: true },
+  {
+    title: 'Crear acuerdo',
+    icon: 'mdi-file-document-plus-outline',
+    to: { name: 'create-agreement' },
+    disabled: false,
+  },
   { title: 'Acuerdos creados', icon: 'mdi-file-document-multiple-outline', disabled: true },
   { title: 'Mis ingresos', icon: 'mdi-wallet-outline', disabled: true },
 ]
