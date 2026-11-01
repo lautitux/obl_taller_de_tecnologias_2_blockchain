@@ -1,4 +1,4 @@
-import { inject, provide, ref } from 'vue'
+import { inject, provide, shallowRef } from 'vue'
 import type { InjectionKey } from 'vue'
 import type { SnackbarMessage } from 'vuetify/lib/components/VSnackbarQueue/VSnackbarQueue.mjs'
 
@@ -9,11 +9,11 @@ interface SnackbarContext {
 const snackbarKey: InjectionKey<SnackbarContext> = Symbol('snackbar')
 
 export function provideSnackbarQueue() {
-  const messages = ref<SnackbarMessage[]>([])
+  const messages = shallowRef<SnackbarMessage[]>([])
 
   provide(snackbarKey, {
     notify(message) {
-      messages.value.push(message)
+      messages.value = [message, ...messages.value]
     },
   })
 
