@@ -59,5 +59,16 @@ watch(
         />
       </v-list>
     </nav>
+    <template #append>
+      <v-divider />
+      <v-list nav aria-label="Configuración">
+        <v-list-item
+          title="Configuración"
+          prepend-icon="mdi-cog-outline"
+          :to="{ name: 'settings' }"
+          @click="open = false"
+        />
+      </v-list>
+    </template>
   </v-navigation-drawer>
 </template>

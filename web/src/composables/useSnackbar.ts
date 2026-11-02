@@ -8,6 +8,12 @@ interface SnackbarContext {
 
 const snackbarKey: InjectionKey<SnackbarContext> = Symbol('snackbar')
 
+const notificationIcons = {
+  error: 'mdi-alert-circle-outline',
+  success: 'mdi-check-circle-outline',
+  info: 'mdi-information-outline',
+} as const
+
 export function provideSnackbarQueue() {
   const messages = shallowRef<SnackbarMessage[]>([])
 
@@ -27,5 +33,22 @@ export function useSnackbar() {
     throw new Error('useSnackbar debe usarse dentro del proveedor de App.vue')
   }
 
-  return snackbar
+  const { notify } = snackbar
+
+  function notifyStatus(text: string, status: keyof typeof notificationIcons) {
+    notify({
+      text,
+      color: status,
+      variant: 'tonal',
+      rounded: 'lg',
+      prependIcon: notificationIcons[status],
+    })
+  }
+
+  return {
+    notify,
+    notifyError: (text: string) => notifyStatus(text, 'error'),
+    notifySuccess: (text: string) => notifyStatus(text, 'success'),
+    notifyInfo: (text: string) => notifyStatus(text, 'info'),
+  }
 }

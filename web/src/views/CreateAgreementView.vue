@@ -2,6 +2,10 @@
 import { computed, reactive, shallowRef } from 'vue'
 import { useAgreementPeriod } from '@/composables/useAgreementPeriod'
 import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreementRules'
+import { useConnection } from '@wagmi/vue'
+import { useSettings } from '@/composables/useSettings'
+import { useTokenApproval } from '@/composables/useTokenApproval'
+const { isConnected, isDisconnected } = useConnection()
 
 const formValid = shallowRef<boolean | null>(null)
 
@@ -17,7 +21,21 @@ const agreement = reactive({
 })
 
 const { periodError } = useAgreementPeriod(agreement)
-const canApprove = computed(() => formValid.value === true && !periodError.value)
+const { settings } = useSettings()
+const {
+  approve: approveTokens,
+  canApprove,
+  isApproving,
+  isApproved,
+  statusText: approvalStatus,
+  transaction: approvalTransaction,
+  errorMessage: approvalError,
+} = useTokenApproval(() => ({
+  token: agreement.token,
+  amount: agreement.totalAmount,
+  spender: settings.contractAddress ?? '',
+  enabled: isConnected.value && formValid.value === true && !periodError.value,
+}))
 
 const timeFields = [
   { key: 'startTime', label: 'Hora de inicio' },
@@ -38,9 +56,18 @@ const revocabilityHint = computed(() =>
       <p>Definí quién recibirá los tokens y durante qué período se liberarán gradualmente.</p>
     </header>
 
+    <v-alert v-if="isDisconnected" type="warning" variant="tonal" class="mb-6">
+      Para crear un acuerdo es necesario que conectes una billetera.
+    </v-alert>
+
     <v-row>
       <v-col cols="12" md="8">
-        <v-form v-model="formValid" validate-on="blur" @submit.prevent>
+        <v-form
+          v-model="formValid"
+          :disabled="!isConnected || isApproving"
+          validate-on="blur"
+          @submit.prevent
+        >
           <v-card>
             <v-card-title tag="h2" class="font-weight-regular">Datos del acuerdo</v-card-title>
             <v-card-text>
@@ -189,9 +216,49 @@ const revocabilityHint = computed(() =>
               block
               color="success"
               :disabled="!canApprove"
+              :loading="isApproving"
               prepend-icon="mdi-check-circle-outline"
-              >Aprobar tokens</v-btn
+              @click="approveTokens"
+              >{{ isApproved ? 'Tokens aprobados' : 'Aprobar tokens' }}</v-btn
             >
+            <v-alert
+              v-if="approvalStatus"
+              type="info"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              {{ approvalStatus }}
+            </v-alert>
+            <v-alert
+              v-else-if="isApproved"
+              type="success"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              El contrato tiene autorización para utilizar el monto indicado.
+            </v-alert>
+            <v-alert
+              v-else-if="approvalError"
+              type="error"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              {{ approvalError }}
+            </v-alert>
+            <p v-if="approvalTransaction" class="text-body-2 text-break mt-4">
+              Transacción:
+              <a
+                v-if="approvalTransaction.explorer"
+                :href="`${approvalTransaction.explorer}/tx/${approvalTransaction.hash}`"
+                target="_blank"
+                rel="noopener noreferrer"
+                >{{ approvalTransaction.hash }}</a
+              >
+              <span v-else>{{ approvalTransaction.hash }}</span>
+            </p>
 
             <v-divider class="my-6" />
 

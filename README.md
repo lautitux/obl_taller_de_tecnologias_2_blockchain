@@ -86,7 +86,19 @@ La web todavía es la plantilla inicial y no tiene tests ni conexión con los co
 
 Hardhat tiene redes simuladas y configuración de Sepolia. Para usar Sepolia, definir `SEPOLIA_RPC_URL` y `SEPOLIA_PRIVATE_KEY` en el entorno del proceso de Hardhat. No exponer la clave privada mediante variables `VITE_*`.
 
-Todavía no hay un módulo de despliegue. Al implementar la integración, exportar el ABI desde la compilación y registrar las direcciones por red desde el despliegue. El frontend debe consumir esos datos públicos sin importar la configuración de Hardhat ni copiar ABIs a mano.
+El módulo `blockchain/ignition/modules/Vesting.ts` despliega el contrato de acuerdos. Ignition registra su dirección en `blockchain/ignition/deployments/chain-<chainId>/deployed_addresses.json`.
+
+El módulo `blockchain/ignition/modules/VestingToken.ts` despliega el token `VDT` y acuña 10.000 tokens para la primera cuenta de despliegue (`m.getAccount(0)`). El monto se puede cambiar con el parámetro `initialMintAmount`, expresado en unidades mínimas (18 decimales). Para desplegarlo en el nodo local, ejecutar `npm run dev:blockchain` y, en otra terminal desde la raíz:
+
+```sh
+npm exec --workspace blockchain -- hardhat ignition deploy ignition/modules/VestingToken.ts --network localhost
+```
+
+La dirección queda registrada bajo `VestingTokenModule#VestingToken`. Su función `mint(to, amount)` es pública: cualquier cuenta puede acuñar tokens para probar los acuerdos; los montos usan 18 decimales.
+
+Por el momento, la dirección por defecto de la web está definida en `web/src/config/settings.ts` y corresponde al contrato local (red 31337). No se sincroniza automáticamente con Hardhat ni cambia al cambiar la red de la billetera.
+
+El array `settingsFields` define el nombre, la descripción, las reglas opcionales y el valor por defecto opcional de cada campo de Configuración. La pantalla genera sus inputs a partir de esas definiciones. Si un campo tiene valor por defecto y su valor actual es distinto, muestra una flecha de deshacer dentro del input. Restablecer modifica el borrador; «Guardar configuración» aplica los cambios y los conserva en el navegador. Guardar el valor por defecto elimina la personalización persistida de ese campo.
 
 ## CI
 

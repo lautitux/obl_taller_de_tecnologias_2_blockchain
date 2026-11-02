@@ -17,6 +17,14 @@ const app = createApp(App)
 app.use(router)
 
 const vuetify = createVuetify({
+  defaults: {
+    VTextField: { variant: 'outlined' },
+    VDateInput: { variant: 'outlined' },
+    VSelect: { variant: 'outlined' },
+    VAutocomplete: { variant: 'outlined' },
+    VCombobox: { variant: 'outlined' },
+    VTextarea: { variant: 'outlined' },
+  },
   locale: {
     locale: 'es',
     messages: { es },
