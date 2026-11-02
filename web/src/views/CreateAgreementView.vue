@@ -5,6 +5,7 @@ import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validati
 import { useConnection } from '@wagmi/vue'
 import { useSettings } from '@/composables/useSettings'
 import { useTokenApproval } from '@/composables/useTokenApproval'
+import { useCreateAgreement } from '@/composables/useCreateAgreement'
 const { isConnected, isDisconnected } = useConnection()
 
 const formValid = shallowRef<boolean | null>(null)
@@ -20,7 +21,7 @@ const agreement = reactive({
   revocable: false,
 })
 
-const { periodError } = useAgreementPeriod(agreement)
+const { startDate, endDate, periodError } = useAgreementPeriod(agreement)
 const { settings } = useSettings()
 const {
   approve: approveTokens,
@@ -35,6 +36,30 @@ const {
   amount: agreement.totalAmount,
   spender: settings.contractAddress ?? '',
   enabled: isConnected.value && formValid.value === true && !periodError.value,
+}))
+
+const {
+  create: createAgreement,
+  canCreate,
+  isCreating,
+  isCreated,
+  statusText: creationStatus,
+  transactionHash: creationTransactionHash,
+  errorMessage: creationError,
+} = useCreateAgreement(() => ({
+  contractAddress: settings.contractAddress ?? '',
+  beneficiary: agreement.beneficiary,
+  token: agreement.token,
+  amount: agreement.totalAmount,
+  startDate: startDate.value,
+  endDate: endDate.value,
+  revocable: agreement.revocable,
+  enabled:
+    isConnected.value &&
+    formValid.value === true &&
+    !periodError.value &&
+    isApproved.value &&
+    !isApproving.value,
 }))
 
 const timeFields = [
@@ -64,7 +89,7 @@ const revocabilityHint = computed(() =>
       <v-col cols="12" md="8">
         <v-form
           v-model="formValid"
-          :disabled="!isConnected || isApproving"
+          :disabled="!isConnected || isApproving || isCreating || isCreated"
           validate-on="blur"
           @submit.prevent
         >
@@ -215,7 +240,7 @@ const revocabilityHint = computed(() =>
             <v-btn
               block
               color="success"
-              :disabled="!canApprove"
+              :disabled="!canApprove || isCreating || isCreated"
               :loading="isApproving"
               prepend-icon="mdi-check-circle-outline"
               @click="approveTokens"
@@ -267,9 +292,51 @@ const revocabilityHint = computed(() =>
               Después de confirmar la aprobación, se transferirá el monto total al contrato y se
               registrará el acuerdo.
             </p>
-            <v-btn block color="primary" disabled prepend-icon="mdi-file-document-plus-outline">
-              Crear acuerdo
+            <v-btn
+              block
+              color="primary"
+              :disabled="!canCreate"
+              :loading="isCreating"
+              prepend-icon="mdi-file-document-plus-outline"
+              @click="createAgreement"
+            >
+              {{ isCreated ? 'Acuerdo creado' : 'Crear acuerdo' }}
             </v-btn>
+
+            <v-alert
+              v-if="creationStatus"
+              type="info"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              {{ creationStatus }}
+            </v-alert>
+
+            <v-alert
+              v-else-if="isCreated"
+              type="success"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              El acuerdo se confirmó en la blockchain y los tokens quedaron depositados en el contrato.
+              Para crear otro acuerdo, recargá esta página.
+            </v-alert>
+
+            <v-alert
+              v-else-if="creationError"
+              type="error"
+              variant="tonal"
+              class="mt-4"
+              aria-live="polite"
+            >
+              {{ creationError }}
+            </v-alert>
+
+            <p v-if="creationTransactionHash" class="text-body-2 text-break mt-4">
+              Transacción: {{ creationTransactionHash }}
+            </p>
           </v-card-text>
         </v-card>
 
