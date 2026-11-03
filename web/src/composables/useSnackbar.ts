@@ -1,4 +1,4 @@
-import { inject, provide, ref } from 'vue'
+import { inject, provide, shallowRef } from 'vue'
 import type { InjectionKey } from 'vue'
 import type { SnackbarMessage } from 'vuetify/lib/components/VSnackbarQueue/VSnackbarQueue.mjs'
 
@@ -8,12 +8,18 @@ interface SnackbarContext {
 
 const snackbarKey: InjectionKey<SnackbarContext> = Symbol('snackbar')
 
+const notificationIcons = {
+  error: 'mdi-alert-circle-outline',
+  success: 'mdi-check-circle-outline',
+  info: 'mdi-information-outline',
+} as const
+
 export function provideSnackbarQueue() {
-  const messages = ref<SnackbarMessage[]>([])
+  const messages = shallowRef<SnackbarMessage[]>([])
 
   provide(snackbarKey, {
     notify(message) {
-      messages.value.push(message)
+      messages.value = [message, ...messages.value]
     },
   })
 
@@ -27,5 +33,22 @@ export function useSnackbar() {
     throw new Error('useSnackbar debe usarse dentro del proveedor de App.vue')
   }
 
-  return snackbar
+  const { notify } = snackbar
+
+  function notifyStatus(text: string, status: keyof typeof notificationIcons) {
+    notify({
+      text,
+      color: status,
+      variant: 'tonal',
+      rounded: 'lg',
+      prependIcon: notificationIcons[status],
+    })
+  }
+
+  return {
+    notify,
+    notifyError: (text: string) => notifyStatus(text, 'error'),
+    notifySuccess: (text: string) => notifyStatus(text, 'success'),
+    notifyInfo: (text: string) => notifyStatus(text, 'info'),
+  }
 }

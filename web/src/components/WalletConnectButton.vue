@@ -4,18 +4,13 @@ import { useSnackbar } from '@/composables/useSnackbar'
 
 const { compact = false } = defineProps<{ compact?: boolean }>()
 
-const { notify } = useSnackbar()
+const { notifyError } = useSnackbar()
 
 const connectors = useConnectors()
 const { mutate: connect, isPending } = useConnect({
   mutation: {
     onError() {
-      notify({
-        text: 'Error de conexión con la billetera.',
-        color: 'error',
-        variant: 'tonal',
-        prependIcon: 'mdi-sync-off',
-      })
+      notifyError('Error de conexión con la billetera.')
     },
   },
 })

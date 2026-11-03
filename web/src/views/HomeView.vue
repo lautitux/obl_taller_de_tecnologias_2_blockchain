@@ -2,6 +2,7 @@
 const sections = [
   {
     title: 'Crear acuerdo',
+    to: { name: 'create-agreement' },
     icon: 'mdi-file-document-plus-outline',
     description:
       'Definí quién recibirá los tokens, el monto y el período durante el que se liberarán.',
@@ -47,10 +48,18 @@ const sections = [
             <template #title>
               <h3 class="text-h6">{{ section.title }}</h3>
             </template>
+            <template v-if="section.to" #append>
+              <v-btn
+                :to="section.to"
+                icon="mdi-arrow-top-right"
+                variant="text"
+                :aria-label="`Ir a ${section.title}`"
+              />
+            </template>
             <v-card-text>
               <p>{{ section.description }}</p>
               <p class="mt-4">{{ section.detail }}</p>
-              <v-chip size="small" prepend-icon="mdi-clock-outline" class="mt-4">
+              <v-chip v-if="!section.to" size="small" prepend-icon="mdi-clock-outline" class="mt-4">
                 Próximamente
               </v-chip>
             </v-card-text>
