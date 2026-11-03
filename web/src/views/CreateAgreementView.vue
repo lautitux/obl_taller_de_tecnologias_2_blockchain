@@ -320,8 +320,8 @@ const revocabilityHint = computed(() =>
               class="mt-4"
               aria-live="polite"
             >
-              El acuerdo se confirmó en la blockchain y los tokens quedaron depositados en el contrato.
-              Para crear otro acuerdo, recargá esta página.
+              El acuerdo se confirmó en la blockchain y los tokens quedaron depositados en el
+              contrato. Para crear otro acuerdo, recargá esta página.
             </v-alert>
 
             <v-alert

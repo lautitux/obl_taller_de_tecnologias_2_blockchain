@@ -39,11 +39,7 @@ export function useCreateAgreement(input: MaybeRefOrGetter<CreateAgreementInput>
   const isCreating = computed(() => stage.value !== 'idle')
 
   const canCreate = computed(
-    () =>
-      toValue(input).enabled &&
-      isConnected.value &&
-      !isCreating.value &&
-      !isCreated.value,
+    () => toValue(input).enabled && isConnected.value && !isCreating.value && !isCreated.value,
   )
 
   const statusText = computed(() => {
@@ -146,11 +142,7 @@ export function useCreateAgreement(input: MaybeRefOrGetter<CreateAgreementInput>
         account: owner,
       })
 
-      if (
-        currentRequestKey() !== requestKey ||
-        !isConnected.value ||
-        !toValue(input).enabled
-      ) {
+      if (currentRequestKey() !== requestKey || !isConnected.value || !toValue(input).enabled) {
         throw new Error('La cuenta, la red o los datos cambiaron. Revisalos y volvé a intentar.')
       }
 
@@ -195,8 +187,7 @@ export function useCreateAgreement(input: MaybeRefOrGetter<CreateAgreementInput>
             ? 'Cancelaste la solicitud en tu billetera.'
             : error.shortMessage
       } else {
-        errorMessage.value =
-          error instanceof Error ? error.message : 'No se pudo crear el acuerdo.'
+        errorMessage.value = error instanceof Error ? error.message : 'No se pudo crear el acuerdo.'
       }
 
       notifyError(errorMessage.value)
