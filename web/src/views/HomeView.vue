@@ -9,7 +9,7 @@ const sections = [
     detail: 'Elegí si el acuerdo será revocable y autorizá el uso de tokens antes de crearlo.',
   },
   {
-    title: 'Acuerdos creados',
+    title: 'Mis acuerdos',
     to: { name: 'my-agreements' },
     icon: 'mdi-file-document-multiple-outline',
     description: 'Consultá los acuerdos donde tu billetera sea pagadora y seguí su evolución.',

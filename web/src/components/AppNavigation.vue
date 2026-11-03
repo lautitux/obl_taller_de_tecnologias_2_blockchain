@@ -14,7 +14,7 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { title: 'Inicio', icon: 'mdi-home-outline', to: { name: 'home' }, disabled: false },
   {
-    title: 'Crear acuerdo',
+    title: 'Mis acuerdos',
     icon: 'mdi-file-document-plus-outline',
     to: { name: 'create-agreement' },
     disabled: false,
