@@ -19,7 +19,12 @@ const navigationItems: NavigationItem[] = [
     to: { name: 'create-agreement' },
     disabled: false,
   },
-  { title: 'Acuerdos creados', icon: 'mdi-file-document-multiple-outline', disabled: true },
+  {
+    title: 'Acuerdos creados',
+    icon: 'mdi-file-document-multiple-outline',
+    to: { name: 'my-agreements' },
+    disabled: false,
+  },
   { title: 'Mis ingresos', icon: 'mdi-wallet-outline', disabled: true },
 ]
 
