@@ -2,11 +2,17 @@
 import { computed, reactive, shallowRef } from 'vue'
 import { useAgreementPeriod } from '@/composables/useAgreementPeriod'
 import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreementRules'
-import { useConnection } from '@wagmi/vue'
+import { useChains, useConnection } from '@wagmi/vue'
 import { useSettings } from '@/composables/useSettings'
-import { useTokenApproval } from '@/composables/useTokenApproval'
-import { useCreateAgreement } from '@/composables/useCreateAgreement'
-const { isConnected, isDisconnected } = useConnection()
+import {
+  useApproveErc20,
+  useParseAmountErc20,
+  useReadAllowanceErc20,
+  useReadErc20,
+} from '@/composables/useErc20'
+import { isAddress, type Address } from 'viem'
+import { useCreateVestingAgreement } from '@/composables/useVesting'
+const { isConnected, isDisconnected, address: clientAddress } = useConnection()
 
 const formValid = shallowRef<boolean | null>(null)
 
@@ -23,44 +29,98 @@ const agreement = reactive({
 
 const { startDate, endDate, periodError } = useAgreementPeriod(agreement)
 const { settings } = useSettings()
+
+const { decimals: tokenDecimals } = useReadErc20(() => ({
+  address: agreement.token as Address,
+  enabled: isAddress(agreement.token),
+}))
+
+const { allowance: tokenAllowance, refresh: refreshAllowance } = useReadAllowanceErc20(() => ({
+  address: agreement.token as Address,
+  owner: clientAddress.value as Address,
+  spender: settings.contractAddress as Address,
+  enabled:
+    isConnected.value && isAddress(agreement.token) && isAddress(settings.contractAddress ?? ''),
+}))
+
+const { amount: tokenAmount } = useParseAmountErc20(() => ({
+  amountString: agreement.totalAmount,
+  decimals: tokenDecimals.value ?? 0,
+}))
+const hasEnoughAllowance = computed(() =>
+  Boolean(tokenAllowance.value && tokenAmount.value && tokenAllowance.value >= tokenAmount.value),
+)
+
 const {
   approve: approveTokens,
-  canApprove,
   isApproving,
   isApproved,
-  statusText: approvalStatus,
-  transaction: approvalTransaction,
+  receipt: approvalTransaction,
   errorMessage: approvalError,
-} = useTokenApproval(() => ({
-  token: agreement.token,
-  amount: agreement.totalAmount,
-  spender: settings.contractAddress ?? '',
-  enabled: isConnected.value && formValid.value === true && !periodError.value,
+} = useApproveErc20(() => ({
+  address: agreement.token as Address,
+  spender: settings.contractAddress as Address,
+  value: tokenDecimals.value != null ? tokenAmount.value : null,
 }))
+
+const chains = useChains()
+const explorer = computed(() => {
+  const currentChain = chains.value.find((chain) => chain.id === approvalTransaction.value?.chainId)
+  return currentChain?.blockExplorers?.default
+})
 
 const {
   create: createAgreement,
-  canCreate,
   isCreating,
   isCreated,
-  statusText: creationStatus,
-  transactionHash: creationTransactionHash,
+  receipt: creationTransaction,
   errorMessage: creationError,
-} = useCreateAgreement(() => ({
-  contractAddress: settings.contractAddress ?? '',
-  beneficiary: agreement.beneficiary,
-  token: agreement.token,
-  amount: agreement.totalAmount,
-  startDate: startDate.value,
-  endDate: endDate.value,
-  revocable: agreement.revocable,
-  enabled:
+} = useCreateVestingAgreement(() => ({
+  address: settings.contractAddress as Address,
+  configuration: {
+    beneficiary: agreement.beneficiary as Address,
+    token: agreement.token as Address,
+    totalAmount: tokenAmount.value ?? 0n,
+    startDate: BigInt((startDate.value?.getTime() ?? 0) / 1000),
+    endDate: BigInt((endDate.value?.getTime() ?? 0) / 1000),
+    revocable: agreement.revocable as boolean,
+  },
+}))
+
+const isRefreshingAllowance = shallowRef(false)
+const canSubmit = computed(
+  () =>
     isConnected.value &&
     formValid.value === true &&
+    isAddress(settings.contractAddress ?? '') &&
     !periodError.value &&
-    isApproved.value &&
-    !isApproving.value,
-}))
+    startDate.value != null &&
+    endDate.value != null &&
+    tokenDecimals.value != null &&
+    tokenAmount.value != null &&
+    !isApproving.value &&
+    !isCreating.value &&
+    !isRefreshingAllowance.value &&
+    !isCreated.value,
+)
+const canApprove = computed(() => canSubmit.value && !hasEnoughAllowance.value)
+const canCreate = computed(() => canSubmit.value && hasEnoughAllowance.value)
+
+async function handleApprove() {
+  if (!canApprove.value) return
+  isRefreshingAllowance.value = true
+  try {
+    await approveTokens()
+    if (isApproved.value) await refreshAllowance()
+  } finally {
+    isRefreshingAllowance.value = false
+  }
+}
+
+async function handleCreate() {
+  if (!canCreate.value) return
+  await createAgreement()
+}
 
 const timeFields = [
   { key: 'startTime', label: 'Hora de inicio' },
@@ -240,23 +300,18 @@ const revocabilityHint = computed(() =>
             <v-btn
               block
               color="success"
-              :disabled="!canApprove || isCreating || isCreated"
+              :disabled="!canApprove"
               :loading="isApproving"
               prepend-icon="mdi-check-circle-outline"
-              @click="approveTokens"
-              >{{ isApproved ? 'Tokens aprobados' : 'Aprobar tokens' }}</v-btn
+              @click="handleApprove"
+              >{{ hasEnoughAllowance ? 'Tokens aprobados' : 'Aprobar tokens' }}</v-btn
             >
-            <v-alert
-              v-if="approvalStatus"
-              type="info"
-              variant="tonal"
-              class="mt-4"
-              aria-live="polite"
-            >
-              {{ approvalStatus }}
+            <v-alert v-if="isApproving" type="info" variant="tonal" class="mt-4" aria-live="polite">
+              <!-- {{ approvalStatus }} -->
+              TODO
             </v-alert>
             <v-alert
-              v-else-if="isApproved"
+              v-else-if="hasEnoughAllowance"
               type="success"
               variant="tonal"
               class="mt-4"
@@ -276,13 +331,13 @@ const revocabilityHint = computed(() =>
             <p v-if="approvalTransaction" class="text-body-2 text-break mt-4">
               Transacción:
               <a
-                v-if="approvalTransaction.explorer"
-                :href="`${approvalTransaction.explorer}/tx/${approvalTransaction.hash}`"
+                v-if="explorer"
+                :href="`${explorer.url}/tx/${approvalTransaction.transactionHash}`"
                 target="_blank"
                 rel="noopener noreferrer"
-                >{{ approvalTransaction.hash }}</a
+                >{{ approvalTransaction.transactionHash }}</a
               >
-              <span v-else>{{ approvalTransaction.hash }}</span>
+              <span v-else>{{ approvalTransaction.transactionHash }}</span>
             </p>
 
             <v-divider class="my-6" />
@@ -298,19 +353,14 @@ const revocabilityHint = computed(() =>
               :disabled="!canCreate"
               :loading="isCreating"
               prepend-icon="mdi-file-document-plus-outline"
-              @click="createAgreement"
+              @click="handleCreate"
             >
               {{ isCreated ? 'Acuerdo creado' : 'Crear acuerdo' }}
             </v-btn>
 
-            <v-alert
-              v-if="creationStatus"
-              type="info"
-              variant="tonal"
-              class="mt-4"
-              aria-live="polite"
-            >
-              {{ creationStatus }}
+            <v-alert v-if="isCreating" type="info" variant="tonal" class="mt-4" aria-live="polite">
+              <!-- {{ creationStatus }} -->
+              TODO
             </v-alert>
 
             <v-alert
@@ -334,8 +384,8 @@ const revocabilityHint = computed(() =>
               {{ creationError }}
             </v-alert>
 
-            <p v-if="creationTransactionHash" class="text-body-2 text-break mt-4">
-              Transacción: {{ creationTransactionHash }}
+            <p v-if="creationTransaction" class="text-body-2 text-break mt-4">
+              Transacción: {{ creationTransaction.transactionHash }}
             </p>
           </v-card-text>
         </v-card>

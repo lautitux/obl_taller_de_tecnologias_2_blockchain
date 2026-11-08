@@ -9,7 +9,8 @@ const sections = [
     detail: 'Elegí si el acuerdo será revocable y autorizá el uso de tokens antes de crearlo.',
   },
   {
-    title: 'Acuerdos creados',
+    title: 'Mis acuerdos',
+    to: { name: 'my-agreements' },
     icon: 'mdi-file-document-multiple-outline',
     description: 'Consultá los acuerdos donde tu billetera sea pagadora y seguí su evolución.',
     detail: 'Revisá el monto total, lo devengado y la posibilidad de cancelar cuando corresponda.',
@@ -35,9 +36,9 @@ const sections = [
       </p>
     </header>
 
-    <v-alert type="info" title="Estamos preparando tu espacio" class="mb-6">
-      Las operaciones estarán disponibles próximamente. Mientras tanto, conocé qué podrás hacer en
-      cada sección.
+    <v-alert type="info" title="Tu espacio de acuerdos" class="mb-6">
+      Conectá tu billetera para crear acuerdos y consultar su evolución. La sección Mis ingresos
+      estará disponible próximamente.
     </v-alert>
 
     <section aria-labelledby="sections-title">

@@ -3,10 +3,16 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import CreateAgreementView from '@/views/CreateAgreementView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import MyAgreementsView from '@/views/MyAgreementsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/agreements',
+      name: 'my-agreements',
+      component: MyAgreementsView,
+    },
     {
       path: '/settings',
       name: 'settings',
