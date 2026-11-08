@@ -19,15 +19,13 @@ import {
   type WriteContractErrorType,
 } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
-import { decodeEventLog, isAddressEqual, maxUint256, type Address } from 'viem'
+import { isAddressEqual, maxUint256, type Address } from 'viem'
 import {
   computed,
-  onMounted,
   onWatcherCleanup,
   ref,
   toValue,
   watch,
-  watchEffect,
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue'
@@ -108,7 +106,7 @@ export function useReadVestedAmount(
     query: { enabled },
   })
 
-  return { vestedAmount: data, isLoading, isError, error }
+  return { vestedAmount: data, isSuccess, isLoading, isError, error }
 }
 
 interface VestingAgreementCreateInfo {
