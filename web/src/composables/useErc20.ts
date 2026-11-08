@@ -1,20 +1,19 @@
-import {
-  useChainId,
-  useConfig,
-  useReadContract,
-  useSimulateContract,
-  useWriteContract,
-} from '@wagmi/vue'
-import { readContracts, simulateContract, waitForTransactionReceipt } from '@wagmi/vue/actions'
-import { BaseError, erc20Abi, type Address, type WriteContractErrorType } from 'viem'
-import { ref, toValue, computed, type MaybeRefOrGetter, type WatchEffect } from 'vue'
+import type { TransactionReceipt } from '@/types/transaction'
+import { errorAsMessage, interpretError } from '@/utils/errors'
+import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
+import { simulateContract, waitForTransactionReceipt, writeContract } from '@wagmi/vue/actions'
+import { erc20Abi, maxUint256, parseUnits, type Address, type WriteContractErrorType } from 'viem'
+import { ref, toValue, computed, type MaybeRefOrGetter, watchEffect } from 'vue'
 
-export function useReadErc20(
-  erc20Address: MaybeRefOrGetter<Address | undefined>,
-  enabled: MaybeRefOrGetter<boolean> = true,
-) {
-  const address = computed(() => toValue(erc20Address))
-  const isQueryEnabled = computed(() => toValue(enabled))
+interface Erc20ReadInfo {
+  address: Address
+  enabled?: boolean | undefined
+}
+
+export function useReadErc20(erc20ReadInfo: MaybeRefOrGetter<Erc20ReadInfo>) {
+  const info = computed(() => toValue(erc20ReadInfo))
+  const address = computed(() => info.value.address)
+  const enabled = computed(() => info.value.enabled ?? true)
 
   const {
     data: name,
@@ -24,7 +23,7 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'name',
-    query: { enabled: isQueryEnabled },
+    query: { enabled },
   })
 
   const {
@@ -35,7 +34,7 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'symbol',
-    query: { enabled: isQueryEnabled },
+    query: { enabled },
   })
 
   const {
@@ -46,7 +45,7 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'decimals',
-    query: { enabled: isQueryEnabled },
+    query: { enabled },
   })
 
   const isLoading = computed(
@@ -71,22 +70,23 @@ interface Erc20AllowanceInfo {
   address: Address
   owner: Address
   spender: Address
-  enabled: boolean
+  enabled?: boolean | undefined
 }
 
-export function useReadAllowance(erc20AllowanceInfo: Erc20AllowanceInfo) {
+export function useReadAllowanceErc20(erc20AllowanceInfo: MaybeRefOrGetter<Erc20AllowanceInfo>) {
   const info = computed(() => toValue(erc20AllowanceInfo))
   const address = computed(() => info.value.address)
   const args = computed(() => {
     const { owner, spender } = info.value
     return [owner, spender] as const
   })
-  const isQueryEnabled = computed(() => info.value.enabled)
+  const isQueryEnabled = computed(() => info.value.enabled ?? true)
 
   const {
     data: allowance,
     error,
     isLoading,
+    refetch,
   } = useReadContract({
     abi: erc20Abi,
     address,
@@ -95,37 +95,45 @@ export function useReadAllowance(erc20AllowanceInfo: Erc20AllowanceInfo) {
     query: { enabled: isQueryEnabled },
   })
 
-  return { allowance, error, isLoading }
+  return { allowance, error, isLoading, refresh: refetch }
 }
 
 interface Erc20ApprovalInfo {
   address: Address
   spender: Address
-  value: bigint
+  value: bigint | null
 }
 
-export function useApproveErc20(erc20ApprovalInfo: Erc20ApprovalInfo) {
+export function useApproveErc20(erc20ApprovalInfo: MaybeRefOrGetter<Erc20ApprovalInfo>) {
   const error = ref<Error | WriteContractErrorType | null>(null)
   const errorMessage = ref<string | null>(null)
+  const receipt = ref<TransactionReceipt | null>(null)
   const isApproved = ref<boolean>(false)
   const isApproving = ref<boolean>(false)
 
   const config = useConfig()
   const chainId = useChainId()
-  const { mutateAsync, error: writeError } = useWriteContract()
 
-  const approveToken = async () => {
-    const { address, spender, value } = toValue(erc20ApprovalInfo)
+  const approve = async () => {
+    if (isApproving.value) return
 
     error.value = null
     errorMessage.value = null
+    receipt.value = null
     isApproved.value = false
     isApproving.value = true
 
     try {
+      const { address, spender, value } = toValue(erc20ApprovalInfo)
+      const networkId = chainId.value
+
+      if (value == null || value <= 0n || value > maxUint256) {
+        throw new Error('Ingresá un monto válido antes de aprobar.')
+      }
+
       const { request, result } = await simulateContract(config, {
         abi: erc20Abi,
-        chainId: toValue(chainId),
+        chainId: networkId,
         address,
         functionName: 'approve',
         args: [spender, value],
@@ -135,35 +143,69 @@ export function useApproveErc20(erc20ApprovalInfo: Erc20ApprovalInfo) {
         throw new Error('La aprobación falló sin revertir.')
       }
 
-      const hash = await mutateAsync(request)
-      if (writeError.value !== null) {
-        throw writeError.value
-      }
+      const hash = await writeContract(config, { ...request, chainId: networkId })
 
-      const receipt = await waitForTransactionReceipt(config, { hash })
-      if (receipt.status === 'reverted') {
+      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
+
+      if (receipt.value.status === 'reverted') {
         throw new Error('La transacción revirtio')
       }
 
       isApproved.value = true
-      return receipt
     } catch (err) {
       error.value = err as Error
-      if (err instanceof BaseError) {
-        errorMessage.value = err.shortMessage
-
-        const isUserRejected = err.message.includes('User rejected the request')
-        if (isUserRejected) {
-          errorMessage.value = 'Transacción cancelada por el usuario.'
-        }
-      } else {
-        errorMessage.value = error.value.message
-      }
+      const interpretedError = interpretError(err)
+      errorMessage.value = errorAsMessage(interpretedError)
       isApproved.value = false
     } finally {
       isApproving.value = false
     }
   }
 
-  return { approveToken, isApproving, isApproved, error, errorMessage }
+  return { approve, isApproving, isApproved, receipt, error, errorMessage }
+}
+
+interface Erc20ParseAmountInfo {
+  amountString: string
+  decimals: number
+}
+
+export function useParseAmountErc20(erc20ParseAmountInfo: MaybeRefOrGetter<Erc20ParseAmountInfo>) {
+  const error = ref<string | null>(null)
+  const amount = ref<bigint | null>(null)
+
+  const parseAmount = () => {
+    const { amountString, decimals } = toValue(erc20ParseAmountInfo)
+    const amount = amountString.trim()
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
+      throw new Error('Ingresá un monto válido. Usá punto para los decimales.')
+    }
+
+    const fraction = amount.split('.')[1] ?? ''
+    if (fraction.replace(/0+$/, '').length > decimals) {
+      throw new Error(`El token admite hasta ${decimals} decimales.`)
+    }
+
+    const units = parseUnits(amount, decimals)
+    if (units <= 0n || units > maxUint256) {
+      throw new Error(
+        'El monto debe ser mayor a cero y estar dentro del rango permitido por el token.',
+      )
+    }
+
+    return units
+  }
+
+  watchEffect(() => {
+    error.value = null
+    amount.value = null
+
+    try {
+      amount.value = parseAmount()
+    } catch (err) {
+      error.value = (err as Error).message
+    }
+  })
+
+  return { amount, error }
 }
