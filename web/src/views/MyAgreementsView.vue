@@ -25,10 +25,14 @@ const { events: agreementEvents } = useGetAgreementEvents(() => ({
         >Crear acuerdo</v-btn
       >
     </header>
-    <section>
+
+    <section v-if="agreementEvents.size === 0">
+      <v-alert type="info" variant="tonal"> Aun no creaste ningún acuerdo. </v-alert>
+    </section>
+    <section v-else>
       <v-row>
         <v-col v-for="[id, event] in agreementEvents" :key="id">
-          <MyAgreementCard :event="event" />
+          <MyAgreementCard showBeneficiary showCancelButton :event="event" />
         </v-col>
       </v-row>
     </section>

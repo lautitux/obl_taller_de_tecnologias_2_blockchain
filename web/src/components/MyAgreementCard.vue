@@ -3,6 +3,7 @@ import { useReadErc20 } from '@/composables/useErc20'
 import { useSettings } from '@/composables/useSettings'
 import {
   useCancelVestingAgreement,
+  useClaimVestedAmount,
   useReadVestedAmount,
   useReadVestingAgreement,
 } from '@/composables/useVesting'
@@ -12,7 +13,26 @@ import { useConnection } from '@wagmi/vue'
 import { formatUnits, isAddressEqual, type Address } from 'viem'
 import { computed } from 'vue'
 
-const { event } = defineProps<{ event: AgreementEvent }>()
+interface AgreementCardConfiguration {
+  showPayer?: boolean
+  showBeneficiary?: boolean
+  showClaimedAmount?: boolean
+  showAvailableAmount?: boolean
+  showCancelButton?: boolean
+  showClaimButton?: boolean
+}
+
+const {
+  showPayer,
+  showBeneficiary,
+  showClaimedAmount,
+  showAvailableAmount,
+  showCancelButton,
+  showClaimButton,
+  event,
+} = defineProps<AgreementCardConfiguration & { event: AgreementEvent }>()
+
+defineEmits<{ cancel: [agreementId: bigint], claim: [agreementId: bigint, availableAmount: bigint] }>()
 
 const { settings } = useSettings()
 
@@ -34,6 +54,16 @@ const { symbol, decimals } = useReadErc20(() => ({
 const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(() => ({
   address: settings.contractAddress as Address,
   agreementId: event.agreementId,
+}))
+
+const availableAmount = computed(
+  () => (vestedAmount?.value ?? 0n) - (agreement.value?.alreadyWithdrawnAmount ?? 0n),
+)
+
+const { claim, isClaiming } = useClaimVestedAmount(() => ({
+  address: settings.contractAddress as Address,
+  agreementId: event.agreementId,
+  amount: availableAmount.value,
 }))
 
 const agreementStatusDisplay: Record<typeof status.value, { icon: string; color: string }> = {
@@ -69,6 +99,7 @@ const { address } = useConnection()
 
 const canCanel = computed(() =>
   Boolean(
+    showCancelButton &&
     address.value !== undefined &&
     agreement.value !== undefined &&
     agreement.value.configuration.revocable &&
@@ -76,6 +107,16 @@ const canCanel = computed(() =>
     agreement.value.state === AgreementState.Active &&
     Date.now() / 1000 < agreement.value.configuration.endDate &&
     isAddressEqual(agreement.value.payer, address.value),
+  ),
+)
+
+const canClaim = computed(() =>
+  Boolean(
+    showClaimButton &&
+    address.value !== undefined &&
+    agreement.value !== undefined &&
+    availableAmount.value > 0n &&
+    isAddressEqual(agreement.value.configuration.beneficiary, address.value),
   ),
 )
 </script>
@@ -91,14 +132,37 @@ const canCanel = computed(() =>
     </template>
     <template #subtitle>#{{ event.agreementId }}</template>
     <template #text>
-      <span>Beneficiario: </span> <span>{{ agreement.configuration.beneficiary }}</span
-      ><br />
-      <span>Monto total: </span>
-      <span>{{ formatUnits(agreement.configuration.totalAmount, decimals ?? 0) }} {{ symbol }}</span
-      ><br />
-      <span>Monto devengado: </span>
-      <span>{{ formatUnits(vestedAmount ?? 0n, decimals ?? 0) }} {{ symbol }}</span
-      ><br />
+      <span v-if="showPayer">
+        <span>Pagador: </span>
+        <span>{{ agreement.payer }}</span
+        ><br />
+      </span>
+      <span v-if="showBeneficiary">
+        <span>Beneficiario:</span>
+        <span>{{ agreement.configuration.beneficiary }}</span
+        ><br />
+      </span>
+      <span>
+        <span>Monto total: </span>
+        <span
+          >{{ formatUnits(agreement.configuration.totalAmount, decimals ?? 0) }} {{ symbol }}</span
+        ><br />
+      </span>
+      <span>
+        <span>Monto devengado: </span>
+        <span>{{ formatUnits(vestedAmount ?? 0n, decimals ?? 0) }} {{ symbol }}</span
+        ><br />
+      </span>
+      <span v-if="showClaimedAmount">
+        <span>Monto reclamado: </span>
+        <span>{{ formatUnits(agreement.alreadyWithdrawnAmount, decimals ?? 0) }} {{ symbol }}</span
+        ><br />
+      </span>
+      <span v-if="showAvailableAmount">
+        <span>Monto disponible: </span>
+        <span>{{ formatUnits(availableAmount, decimals ?? 0) }} {{ symbol }}</span
+        ><br />
+      </span>
     </template>
     <template #actions>
       <v-btn color="primary" prepend-icon="mdi-arrow-top-right">Ver detalles</v-btn>
@@ -108,10 +172,19 @@ const canCanel = computed(() =>
         :loading="isCancelling"
         color="error"
         prepend-icon="mdi-cancel"
-        @click="cancel()"
+        @click="() => { cancel(); $emit('cancel', event.agreementId) }"
       >
-        <span v-if="isCancelled">Cancelado</span>
-        <span v-else>Cancelar</span>
+        Cancelar
+      </v-btn>
+      <v-btn
+        v-if="canClaim"
+        :disable="isClaiming"
+        :loading="isClaiming"
+        color="teal"
+        prepend-icon="mdi-hand-coin-outline"
+        @click="() => { claim(); $emit('claim', event.agreementId, availableAmount) }"
+      >
+        Reclamar
       </v-btn>
     </template>
   </v-card>
