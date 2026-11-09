@@ -12,6 +12,7 @@ import type { AgreementEvent } from '@/types/agreement-event'
 import { useConnection } from '@wagmi/vue'
 import { formatUnits, isAddressEqual, type Address } from 'viem'
 import { computed, shallowRef } from 'vue'
+import AgreementStateChip from './AgreementStateChip.vue'
 
 interface AgreementCardConfiguration {
   showPayer?: boolean
@@ -75,35 +76,6 @@ const { claim, isClaiming } = useClaimVestedAmount(() => ({
   amount: availableAmount.value,
 }))
 
-const agreementStatusDisplay: Record<typeof status.value, { icon: string; color: string }> = {
-  Cancelado: { color: 'error', icon: 'mdi-file-cancel-outline' },
-  Completado: { color: 'success', icon: 'mdi-file-check-outline' },
-  Programado: { color: 'teal', icon: 'mdi-file-clock-outline' },
-  Finalizado: { color: 'success', icon: 'mdi-file-outline' },
-  'En curso': { color: 'primary', icon: 'mdi-file-send-outline' },
-  Indeterminado: { color: 'warning', icon: 'mdi-file-question-outline' },
-}
-
-const status = computed(() => {
-  const now = Math.round(Date.now() / 1000)
-  switch (agreement.value?.state) {
-    case AgreementState.Cancelled:
-      return 'Cancelado'
-    case AgreementState.Completed:
-      return 'Completado'
-    case AgreementState.Active:
-      if (now < agreement.value.configuration.startDate) {
-        return 'Programado'
-      } else if (now >= agreement.value.configuration.endDate) {
-        return 'Finalizado'
-      } else {
-        return 'En curso'
-      }
-    default:
-      return 'Indeterminado'
-  }
-})
-
 const { address } = useConnection()
 
 const canCanel = computed(() =>
@@ -164,9 +136,11 @@ async function onReload() {
         :loading="isReloading"
         @click="onReload"
       />
-      <v-chip :color="agreementStatusDisplay[status].color"
-        ><v-icon :icon="agreementStatusDisplay[status].icon" start />{{ status }}</v-chip
-      >
+      <AgreementStateChip
+        :state="agreement.state"
+        :startDate="agreement.configuration.startDate"
+        :endDate="agreement.configuration.endDate"
+      />
     </template>
     <template #subtitle>#{{ event.agreementId }}</template>
     <template #text>
@@ -203,10 +177,15 @@ async function onReload() {
       </span>
     </template>
     <template #actions>
-      <v-btn color="primary" prepend-icon="mdi-arrow-top-right">Ver detalles</v-btn>
+      <v-btn
+        color="primary"
+        prepend-icon="mdi-arrow-top-right"
+        :to="'/agreements/' + event.agreementId"
+        >Ver detalles</v-btn
+      >
       <v-btn
         v-if="canCanel"
-        :disable="isCancelling"
+        :disabled="isCancelling"
         :loading="isCancelling"
         color="error"
         prepend-icon="mdi-cancel"
@@ -216,7 +195,7 @@ async function onReload() {
       </v-btn>
       <v-btn
         v-if="canClaim"
-        :disable="isClaiming"
+        :disabled="isClaiming"
         :loading="isClaiming"
         color="teal"
         prepend-icon="mdi-hand-coin-outline"
