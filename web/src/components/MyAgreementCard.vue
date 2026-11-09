@@ -2,7 +2,6 @@
 import { useReadErc20 } from '@/composables/useErc20'
 import { useSettings } from '@/composables/useSettings'
 import {
-  readVestingAgreementQueryKey,
   useCancelVestingAgreement,
   useClaimVestedAmount,
   useReadVestedAmount,
@@ -10,7 +9,6 @@ import {
 } from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementEvent } from '@/types/agreement-event'
-import { useQueryClient } from '@tanstack/vue-query'
 import { useConnection } from '@wagmi/vue'
 import { formatUnits, isAddressEqual, type Address } from 'viem'
 import { computed, shallowRef } from 'vue'
