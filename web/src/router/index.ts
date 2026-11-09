@@ -4,6 +4,7 @@ import HomeView from '@/views/HomeView.vue'
 import CreateAgreementView from '@/views/CreateAgreementView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import MyAgreementsView from '@/views/MyAgreementsView.vue'
+import MyBenefitsView from '@/views/MyBenefitsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -12,6 +13,11 @@ const router = createRouter({
       path: '/agreements',
       name: 'my-agreements',
       component: MyAgreementsView,
+    },
+    {
+      path: '/benefit',
+      name: 'my-benefit',
+      component: MyBenefitsView,
     },
     {
       path: '/settings',

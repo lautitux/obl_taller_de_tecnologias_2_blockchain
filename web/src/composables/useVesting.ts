@@ -51,6 +51,20 @@ interface VestingAgreementReadInfo {
   enabled?: boolean | undefined
 }
 
+export function readVestingAgreementQueryKey(
+  address: Address,
+  agreementId: bigint,
+  chainId?: number | undefined,
+) {
+  return readContractQueryKey({
+    address,
+    abi: vestingAbi,
+    functionName: 'agreements',
+    args: [agreementId],
+    chainId,
+  })
+}
+
 export function useReadVestingAgreement(
   vestingAgreementReadInfo: MaybeRefOrGetter<VestingAgreementReadInfo>,
 ) {
@@ -59,7 +73,7 @@ export function useReadVestingAgreement(
   const args = computed(() => [info.value.agreementId] as const)
   const enabled = computed(() => info.value.enabled ?? true)
 
-  const { data, isSuccess, isLoading, isError, error } = useReadContract({
+  const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
     address,
     functionName: 'agreements',
@@ -75,7 +89,7 @@ export function useReadVestingAgreement(
     }
   })
 
-  return { agreement, isLoading, isError, error }
+  return { agreement, isLoading, isError, error, refetch }
 }
 
 function vestingReadAgreementsResponseToAgreement(
@@ -98,7 +112,7 @@ export function useReadVestedAmount(
   const args = computed(() => [info.value.agreementId] as const)
   const enabled = computed(() => info.value.enabled ?? true)
 
-  const { data, isSuccess, isLoading, isError, error } = useReadContract({
+  const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
     address,
     functionName: 'vestedAmountOf',
@@ -106,7 +120,7 @@ export function useReadVestedAmount(
     query: { enabled },
   })
 
-  return { vestedAmount: data, isSuccess, isLoading, isError, error }
+  return { vestedAmount: data, isSuccess, isLoading, isError, error, refetch }
 }
 
 interface VestingAgreementCreateInfo {
@@ -182,7 +196,7 @@ interface VestingAgreementCancelInfo {
 }
 
 export function useCancelVestingAgreement(
-  erc20ApprovalInfo: MaybeRefOrGetter<VestingAgreementCancelInfo>,
+  vestingAgreementCancelInfo: MaybeRefOrGetter<VestingAgreementCancelInfo>,
 ) {
   const error = ref<Error | WriteContractErrorType | null>(null)
   const errorMessage = ref<string | null>(null)
@@ -203,16 +217,10 @@ export function useCancelVestingAgreement(
     isCancelled.value = false
     isCancelling.value = true
 
-    const { address, agreementId } = toValue(erc20ApprovalInfo)
+    const { address, agreementId } = toValue(vestingAgreementCancelInfo)
     const networkId = chainId.value
 
-    const readKey = readContractQueryKey({
-      address,
-      abi: vestingAbi,
-      functionName: 'agreements',
-      args: [agreementId],
-      chainId: networkId,
-    })
+    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
 
     try {
       const { request } = await simulateContract(config, {
@@ -231,7 +239,7 @@ export function useCancelVestingAgreement(
       }
 
       isCancelled.value = true
-      void queryClient.invalidateQueries({ queryKey: readKey })
+      void queryClient.invalidateQueries({ queryKey: readAgreementKey })
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -243,6 +251,74 @@ export function useCancelVestingAgreement(
   }
 
   return { cancel, isCancelling, isCancelled, receipt, error, errorMessage }
+}
+
+interface VestingAgreementClaimInfo {
+  address: Address
+  agreementId: bigint
+  amount: bigint
+}
+
+export function useClaimVestedAmount(
+  vestingAgreementUpdateInfo: MaybeRefOrGetter<VestingAgreementClaimInfo>,
+) {
+  const error = ref<Error | WriteContractErrorType | null>(null)
+  const errorMessage = ref<string | null>(null)
+  const receipt = ref<TransactionReceipt | null>(null)
+  const isClaimed = ref<boolean>(false)
+  const isClaiming = ref<boolean>(false)
+
+  const config = useConfig()
+  const chainId = useChainId()
+  const queryClient = useQueryClient()
+
+  const claim = async (): Promise<void> => {
+    if (isClaiming.value) return
+
+    error.value = null
+    errorMessage.value = null
+    receipt.value = null
+    isClaimed.value = false
+    isClaiming.value = true
+
+    const { address, agreementId, amount } = toValue(vestingAgreementUpdateInfo)
+    const networkId = chainId.value
+
+    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
+
+    try {
+      if (amount <= 0) {
+        throw new Error('La cantidad a reclamar debe ser superior a 0')
+      }
+
+      const { request } = await simulateContract(config, {
+        abi: vestingAbi,
+        chainId: networkId,
+        address,
+        functionName: 'claimAmountFrom',
+        args: [agreementId, amount],
+      })
+
+      const hash = await writeContract(config, { ...request, chainId: networkId })
+
+      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
+      if (receipt.value.status === 'reverted') {
+        throw new Error('La transacción revirtio')
+      }
+
+      isClaimed.value = true
+      await queryClient.invalidateQueries({ queryKey: readAgreementKey })
+    } catch (err) {
+      error.value = err as Error
+      const interpretedError = interpretError(err)
+      errorMessage.value = errorAsMessage(interpretedError)
+      isClaimed.value = false
+    } finally {
+      isClaiming.value = false
+    }
+  }
+
+  return { claim, isClaiming, isClaimed, receipt, error, errorMessage }
 }
 
 interface VestingSearchAgreementsInfo {

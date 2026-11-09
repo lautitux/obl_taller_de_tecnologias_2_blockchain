@@ -17,6 +17,7 @@ const sections = [
   },
   {
     title: 'Mis ingresos',
+    to: { name: 'my-benefit' },
     icon: 'mdi-wallet-outline',
     description:
       'Encontrá los acuerdos donde tu billetera sea beneficiaria y los tokens por recibir.',

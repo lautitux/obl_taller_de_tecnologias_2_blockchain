@@ -5,7 +5,7 @@ import { useGetAgreementEvents } from '@/composables/useVesting'
 import { useConnection } from '@wagmi/vue'
 import type { Address } from 'viem'
 
-const { address } = useConnection()
+const { address, isDisconnected } = useConnection()
 const { settings } = useSettings()
 const { events: agreementEvents } = useGetAgreementEvents(() => ({
   address: settings.contractAddress as Address,
@@ -25,10 +25,19 @@ const { events: agreementEvents } = useGetAgreementEvents(() => ({
         >Crear acuerdo</v-btn
       >
     </header>
-    <section>
+
+    <section v-if="isDisconnected">
+      <v-alert type="info" variant="tonal">
+        Conecta una billetera para hacer uso de esta funcionalidad.
+      </v-alert>
+    </section>
+    <section v-else-if="agreementEvents.size === 0">
+      <v-alert type="info" variant="tonal"> Aun no creaste ningún acuerdo. </v-alert>
+    </section>
+    <section v-else>
       <v-row>
         <v-col v-for="[id, event] in agreementEvents" :key="id">
-          <MyAgreementCard :event="event" />
+          <MyAgreementCard showBeneficiary showCancelButton :event="event" />
         </v-col>
       </v-row>
     </section>

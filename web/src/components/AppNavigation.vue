@@ -25,7 +25,12 @@ const navigationItems: NavigationItem[] = [
     to: { name: 'my-agreements' },
     disabled: false,
   },
-  { title: 'Mis ingresos', icon: 'mdi-wallet-outline', disabled: true },
+  {
+    title: 'Mis ingresos',
+    icon: 'mdi-wallet-outline',
+    to: { name: 'my-benefit' },
+    disabled: false,
+  },
 ]
 
 const open = defineModel<boolean>({ required: true })

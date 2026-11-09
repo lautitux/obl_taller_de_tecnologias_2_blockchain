@@ -141,7 +141,7 @@ const revocabilityHint = computed(() =>
       <p>Definí quién recibirá los tokens y durante qué período se liberarán gradualmente.</p>
     </header>
 
-    <v-alert v-if="isDisconnected" type="warning" variant="tonal" class="mb-6">
+    <v-alert v-if="isDisconnected" type="info" variant="tonal" class="mb-6">
       Para crear un acuerdo es necesario que conectes una billetera.
     </v-alert>
 
