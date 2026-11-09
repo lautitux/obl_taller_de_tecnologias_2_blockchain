@@ -24,7 +24,9 @@ const { events: agreementEvents } = useGetAgreementEvents(() => ({
     </header>
 
     <section v-if="isDisconnected">
-      <v-alert type="info" variant="tonal"> Conecta una billetera para hacer uso de esta funcionalidad. </v-alert>
+      <v-alert type="info" variant="tonal">
+        Conecta una billetera para hacer uso de esta funcionalidad.
+      </v-alert>
     </section>
     <section v-else-if="agreementEvents.size === 0">
       <v-alert type="info" variant="tonal"> No hay acuerdos donde seas el beneficiario. </v-alert>
@@ -37,6 +39,7 @@ const { events: agreementEvents } = useGetAgreementEvents(() => ({
             showClaimedAmount
             showAvailableAmount
             showClaimButton
+            showReloadButton
             :event="event"
           />
         </v-col>

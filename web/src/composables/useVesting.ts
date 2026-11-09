@@ -51,6 +51,20 @@ interface VestingAgreementReadInfo {
   enabled?: boolean | undefined
 }
 
+export function readVestingAgreementQueryKey(
+  address: Address,
+  agreementId: bigint,
+  chainId?: number | undefined,
+) {
+  return readContractQueryKey({
+    address,
+    abi: vestingAbi,
+    functionName: 'agreements',
+    args: [agreementId],
+    chainId,
+  })
+}
+
 export function useReadVestingAgreement(
   vestingAgreementReadInfo: MaybeRefOrGetter<VestingAgreementReadInfo>,
 ) {
@@ -59,7 +73,7 @@ export function useReadVestingAgreement(
   const args = computed(() => [info.value.agreementId] as const)
   const enabled = computed(() => info.value.enabled ?? true)
 
-  const { data, isSuccess, isLoading, isError, error } = useReadContract({
+  const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
     address,
     functionName: 'agreements',
@@ -75,7 +89,7 @@ export function useReadVestingAgreement(
     }
   })
 
-  return { agreement, isLoading, isError, error }
+  return { agreement, isLoading, isError, error, refetch }
 }
 
 function vestingReadAgreementsResponseToAgreement(
@@ -98,7 +112,7 @@ export function useReadVestedAmount(
   const args = computed(() => [info.value.agreementId] as const)
   const enabled = computed(() => info.value.enabled ?? true)
 
-  const { data, isSuccess, isLoading, isError, error } = useReadContract({
+  const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
     address,
     functionName: 'vestedAmountOf',
@@ -106,7 +120,7 @@ export function useReadVestedAmount(
     query: { enabled },
   })
 
-  return { vestedAmount: data, isSuccess, isLoading, isError, error }
+  return { vestedAmount: data, isSuccess, isLoading, isError, error, refetch }
 }
 
 interface VestingAgreementCreateInfo {
@@ -206,13 +220,7 @@ export function useCancelVestingAgreement(
     const { address, agreementId } = toValue(vestingAgreementCancelInfo)
     const networkId = chainId.value
 
-    const readAgreementKey = readContractQueryKey({
-      address,
-      abi: vestingAbi,
-      functionName: 'agreements',
-      args: [agreementId],
-      chainId: networkId,
-    })
+    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
 
     try {
       const { request } = await simulateContract(config, {
@@ -276,13 +284,7 @@ export function useClaimVestedAmount(
     const { address, agreementId, amount } = toValue(vestingAgreementUpdateInfo)
     const networkId = chainId.value
 
-    const readAgreementKey = readContractQueryKey({
-      address,
-      abi: vestingAbi,
-      functionName: 'agreements',
-      args: [agreementId],
-      chainId: networkId,
-    })
+    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
 
     try {
       if (amount <= 0) {

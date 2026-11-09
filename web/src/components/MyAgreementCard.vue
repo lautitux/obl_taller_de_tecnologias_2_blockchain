@@ -2,6 +2,7 @@
 import { useReadErc20 } from '@/composables/useErc20'
 import { useSettings } from '@/composables/useSettings'
 import {
+  readVestingAgreementQueryKey,
   useCancelVestingAgreement,
   useClaimVestedAmount,
   useReadVestedAmount,
@@ -9,9 +10,10 @@ import {
 } from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementEvent } from '@/types/agreement-event'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useConnection } from '@wagmi/vue'
 import { formatUnits, isAddressEqual, type Address } from 'viem'
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 
 interface AgreementCardConfiguration {
   showPayer?: boolean
@@ -20,6 +22,7 @@ interface AgreementCardConfiguration {
   showAvailableAmount?: boolean
   showCancelButton?: boolean
   showClaimButton?: boolean
+  showReloadButton?: boolean
 }
 
 const {
@@ -29,19 +32,27 @@ const {
   showAvailableAmount,
   showCancelButton,
   showClaimButton,
+  showReloadButton,
   event,
 } = defineProps<AgreementCardConfiguration & { event: AgreementEvent }>()
 
-defineEmits<{ cancel: [agreementId: bigint], claim: [agreementId: bigint, availableAmount: bigint] }>()
+const emit = defineEmits<{
+  cancel: [agreementId: bigint]
+  claim: [agreementId: bigint, availableAmount: bigint]
+}>()
 
 const { settings } = useSettings()
 
-const { agreement, isLoading } = useReadVestingAgreement(() => ({
+const {
+  agreement,
+  isLoading,
+  refetch: refetchAgreement,
+} = useReadVestingAgreement(() => ({
   address: settings.contractAddress as Address,
   agreementId: event.agreementId,
 }))
 
-const { vestedAmount } = useReadVestedAmount(() => ({
+const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(() => ({
   address: settings.contractAddress as Address,
   agreementId: event.agreementId,
 }))
@@ -119,6 +130,28 @@ const canClaim = computed(() =>
     isAddressEqual(agreement.value.configuration.beneficiary, address.value),
   ),
 )
+
+async function onCancel() {
+  await cancel()
+  emit('cancel', event.agreementId)
+}
+
+async function onClaim() {
+  await claim()
+  await refetchVested()
+  emit('claim', event.agreementId, availableAmount.value)
+}
+
+const isReloading = shallowRef(false)
+
+async function onReload() {
+  isReloading.value = true
+  try {
+    await Promise.all([refetchAgreement(), refetchVested()])
+  } finally {
+    isReloading.value = false
+  }
+}
 </script>
 
 <template>
@@ -126,6 +159,13 @@ const canClaim = computed(() =>
   <v-card v-if="agreement != undefined">
     <template #title>Acuerdo</template>
     <template #append>
+      <v-btn
+        v-if="showReloadButton"
+        icon="mdi-reload"
+        variant="text"
+        :loading="isReloading"
+        @click="onReload"
+      />
       <v-chip :color="agreementStatusDisplay[status].color"
         ><v-icon :icon="agreementStatusDisplay[status].icon" start />{{ status }}</v-chip
       >
@@ -172,7 +212,7 @@ const canClaim = computed(() =>
         :loading="isCancelling"
         color="error"
         prepend-icon="mdi-cancel"
-        @click="() => { cancel(); $emit('cancel', event.agreementId) }"
+        @click="onCancel"
       >
         Cancelar
       </v-btn>
@@ -182,7 +222,7 @@ const canClaim = computed(() =>
         :loading="isClaiming"
         color="teal"
         prepend-icon="mdi-hand-coin-outline"
-        @click="() => { claim(); $emit('claim', event.agreementId, availableAmount) }"
+        @click="onClaim"
       >
         Reclamar
       </v-btn>
