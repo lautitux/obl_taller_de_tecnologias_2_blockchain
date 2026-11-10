@@ -159,7 +159,7 @@ function formatDate(date: bigint) {
               </td>
             </tr>
             <tr>
-              <th>Fecha de inicio</th>
+              <th>Fecha de finalización</th>
               <td>
                 {{ formatDate(agreement.configuration.endDate) }}
                 <br />
