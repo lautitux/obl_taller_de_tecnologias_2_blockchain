@@ -29,3 +29,5 @@ export interface AgreementCancelled {
 export type AgreementEventName = 'AgreementCreated' | 'AgreementWithdrawal' | 'AgreementCancelled'
 
 export type AgreementEvent = AgreementCreated | AgreementWithdrawal | AgreementCancelled
+
+export type ExtendedAgreementEvent = AgreementEvent & { eventName: string; blockTimestamp?: bigint | null }

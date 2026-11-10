@@ -1,6 +1,10 @@
 import { vestingAbi } from '@/contracts/vestingAbi'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
-import type { AgreementEvent, AgreementEventName } from '@/types/agreement-event'
+import type {
+  AgreementEvent,
+  AgreementEventName,
+  ExtendedAgreementEvent,
+} from '@/types/agreement-event'
 import type { TransactionReceipt } from '@/types/transaction'
 import { errorAsMessage, interpretError } from '@/utils/errors'
 import { useQueryClient } from '@tanstack/vue-query'
@@ -339,7 +343,7 @@ export function useGetAgreementEvents(
   const payer = computed(() => info.value.payer)
   const beneficiary = computed(() => info.value.beneficiary)
 
-  const events = ref(new Map<string, AgreementEvent>())
+  const events = ref(new Map<string, ExtendedAgreementEvent>())
 
   useWatchContractEvent({
     abi: vestingAbi,
@@ -365,7 +369,11 @@ export function useGetAgreementEvents(
         )
           continue
 
-        events.value.set(id, event)
+        events.value.set(id, {
+          ...event,
+          eventName: log.eventName,
+          blockTimestamp: log.blockTimestamp,
+        })
       }
     },
   })
@@ -396,7 +404,11 @@ export function useGetAgreementEvents(
         for (const log of logs) {
           const id = `${log.transactionHash}:${log.logIndex}`
           const event: AgreementEvent = log.args
-          events.value.set(id, event)
+          events.value.set(id, {
+            ...event,
+            eventName: log.eventName,
+            blockTimestamp: log.blockTimestamp,
+          })
         }
       })
 
