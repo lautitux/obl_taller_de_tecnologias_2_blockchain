@@ -2,7 +2,11 @@
 import AgreementStateChip from '@/components/AgreementStateChip.vue'
 import { useReadErc20 } from '@/composables/useErc20'
 import { useSettings } from '@/composables/useSettings'
-import { useGetAgreementEvents, useReadVestingAgreement } from '@/composables/useVesting'
+import {
+  useGetAgreementEvents,
+  useReadVestedAmount,
+  useReadVestingAgreement,
+} from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementWithdrawal } from '@/types/agreement-event'
 import { formatUnits, type Address } from 'viem'
@@ -15,6 +19,11 @@ const agreementId = computed(() => BigInt((route.params.id ?? '') as string))
 const { settings } = useSettings()
 
 const { agreement } = useReadVestingAgreement(() => ({
+  address: settings.contractAddress as Address,
+  agreementId: agreementId.value,
+}))
+
+const { vestedAmount } = useReadVestedAmount(() => ({
   address: settings.contractAddress as Address,
   agreementId: agreementId.value,
 }))
@@ -40,6 +49,15 @@ const eventItems = computed(() =>
   ),
 )
 
+const claimedPercentage = computed(() =>
+  Number(
+    ((agreement.value?.alreadyWithdrawnAmount ?? 0n) * 100n) /
+      (agreement.value?.configuration.totalAmount ?? 0n),
+  ),
+)
+const vestedPercentage = computed(() =>
+  Number(((vestedAmount.value ?? 0n) * 100n) / (agreement.value?.configuration.totalAmount ?? 0n)),
+)
 const agreementEvents: Record<string, { text: string; icon: string; color: string }> = {
   AgreementCreated: {
     text: 'Creación del acuerdo',
@@ -75,6 +93,26 @@ function formatDate(date: bigint) {
         <v-table>
           <tbody>
             <tr>
+              <th>Progreso</th>
+              <td>
+                <span class="mr-4 d-inline-flex align-center"><v-icon color="primary">mdi-circle-medium</v-icon> Retirado</span>
+                <span class="mr-4 d-inline-flex align-center"><v-icon color="success">mdi-circle-medium</v-icon> Devengado</span>
+                <span class="mr-4 d-inline-flex align-center"><v-icon color="error">mdi-circle-medium</v-icon> Cancelado</span>
+                <v-progress-linear
+                  :location="null"
+                  :buffer-color="agreement.state === AgreementState.Cancelled ? 'error' : 'success'"
+                  buffer-opacity="1"
+                  color="primary"
+                  height="12"
+                  max="100"
+                  min="0"
+                  :model-value="claimedPercentage"
+                  :buffer-value="agreement.state === AgreementState.Cancelled ? 100 : vestedPercentage"
+                  rounded
+                ></v-progress-linear>
+              </td>
+            </tr>
+            <tr>
               <th>Estado</th>
               <td>
                 <AgreementStateChip :state="agreement.state" />
@@ -105,6 +143,10 @@ function formatDate(date: bigint) {
               <td>
                 {{ formatUnits(agreement.configuration.totalAmount, decimals ?? 0) }} {{ symbol }}
               </td>
+            </tr>
+            <tr>
+              <th>Monto devengado</th>
+              <td>{{ formatUnits(vestedAmount ?? 0n, decimals ?? 0) }} {{ symbol }}</td>
             </tr>
             <tr>
               <th>Fecha de inicio</th>
@@ -155,14 +197,16 @@ function formatDate(date: bigint) {
                   event.blockTimestamp ? formatDate(event.blockTimestamp) : 'Pendiente'
                 }}</template>
                 <template #text>
-                  <v-icon class="mr-4" :color="agreementEvents[event.eventName]!.color">{{
-                    agreementEvents[event.eventName]!.icon
-                  }}</v-icon>
-                  {{ agreementEvents[event.eventName]!.text }}
-                  <span v-if="event.eventName === 'AgreementWithdrawal'"
-                    >{{ formatUnits((event as AgreementWithdrawal).amount, decimals ?? 0) }}
-                    {{ symbol }}</span
-                  >
+                  <div class="d-inline-flex align-center">
+                    <v-icon class="mr-4" :color="agreementEvents[event.eventName]!.color">{{
+                      agreementEvents[event.eventName]!.icon
+                    }}</v-icon>
+                    {{ agreementEvents[event.eventName]!.text }}
+                    <span v-if="event.eventName === 'AgreementWithdrawal'"
+                      >{{ formatUnits((event as AgreementWithdrawal).amount, decimals ?? 0) }}
+                      {{ symbol }}</span
+                    >
+                  </div>
                 </template>
               </v-card>
             </template>
