@@ -45,7 +45,7 @@ const eventPage = ref(1)
 
 const eventItems = computed(() =>
   [...events.value.entries()].sort(
-    ([, a], [, b]) => (Number(b.blockTimestamp) ?? 0) - (Number(a.blockTimestamp) ?? 0),
+    ([, a], [, b]) => (Number(b.blockTimestamp ?? 0)) - (Number(a.blockTimestamp ?? 0)),
   ),
 )
 
@@ -95,9 +95,15 @@ function formatDate(date: bigint) {
             <tr>
               <th>Progreso</th>
               <td>
-                <span class="mr-4 d-inline-flex align-center"><v-icon color="primary">mdi-circle-medium</v-icon> Retirado</span>
-                <span class="mr-4 d-inline-flex align-center"><v-icon color="success">mdi-circle-medium</v-icon> Devengado</span>
-                <span class="mr-4 d-inline-flex align-center"><v-icon color="error">mdi-circle-medium</v-icon> Cancelado</span>
+                <span class="mr-4 d-inline-flex align-center"
+                  ><v-icon color="primary">mdi-circle-medium</v-icon> Retirado</span
+                >
+                <span class="mr-4 d-inline-flex align-center"
+                  ><v-icon color="success">mdi-circle-medium</v-icon> Devengado</span
+                >
+                <span class="mr-4 d-inline-flex align-center"
+                  ><v-icon color="error">mdi-circle-medium</v-icon> Cancelado</span
+                >
                 <v-progress-linear
                   :location="null"
                   :buffer-color="agreement.state === AgreementState.Cancelled ? 'error' : 'success'"
@@ -107,7 +113,9 @@ function formatDate(date: bigint) {
                   max="100"
                   min="0"
                   :model-value="claimedPercentage"
-                  :buffer-value="agreement.state === AgreementState.Cancelled ? 100 : vestedPercentage"
+                  :buffer-value="
+                    agreement.state === AgreementState.Cancelled ? 100 : vestedPercentage
+                  "
                   rounded
                 ></v-progress-linear>
               </td>
