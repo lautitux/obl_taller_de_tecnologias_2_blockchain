@@ -4,7 +4,7 @@ export default buildModule("VestingTokenModule", (m) => {
   const deployer = m.getAccount(0);
   const initialMintAmount = m.getParameter(
     "initialMintAmount",
-    10_000n * 10n ** 18n,
+    1_000_000n * 10n ** 18n,
   );
   const vestingToken = m.contract("VestingToken");
 

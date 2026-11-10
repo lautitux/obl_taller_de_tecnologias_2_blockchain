@@ -2,6 +2,39 @@
 
 Monorepo con npm workspaces: contratos de vesting en Solidity con Hardhat y una aplicación web con Vue y Vite.
 
+## Guía rápida de desarrollo local
+
+Para levantar el entorno local, abrir una terminal dentro de `blockchain` y ejecutar:
+
+```sh
+npx hardhat node
+```
+
+En otra terminal, también dentro de `blockchain`, desplegar primero `Vesting.ts` y luego `VestingToken.ts`, usando la red `localhost`:
+
+```sh
+npx hardhat ignition deploy ignition/modules/Vesting.ts --network localhost
+npx hardhat ignition deploy ignition/modules/VestingToken.ts --network localhost
+```
+
+Los contratos quedarán desplegados en las siguientes direcciones:
+
+- `Vesting`: `0x5FbDB2315678afecb367f032d93F642f64180aa3`
+- `VestingToken`: `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512`
+
+La cuenta `0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266` recibe 1.000.000 de tokens. Se recomienda importarla en MetaMask para realizar pruebas.
+
+> [!TIP]
+> Si aparecen errores de transacciones fallidas con el mensaje `nonce too low`, ir a **MetaMask > Settings > Developer tools > Delete activity and nonce data** para solucionarlo.
+
+Para levantar la aplicación web, ejecutar desde la raíz del repositorio:
+
+```sh
+npm run dev
+```
+
+Luego, abrir `http://localhost:5173` en el navegador.
+
 ## Estructura
 
 ```text
@@ -88,7 +121,7 @@ Hardhat tiene redes simuladas y configuración de Sepolia. Para usar Sepolia, de
 
 El módulo `blockchain/ignition/modules/Vesting.ts` despliega el contrato de acuerdos. Ignition registra su dirección en `blockchain/ignition/deployments/chain-<chainId>/deployed_addresses.json`.
 
-El módulo `blockchain/ignition/modules/VestingToken.ts` despliega el token `VDT` y acuña 10.000 tokens para la primera cuenta de despliegue (`m.getAccount(0)`). El monto se puede cambiar con el parámetro `initialMintAmount`, expresado en unidades mínimas (18 decimales). Para desplegarlo en el nodo local, ejecutar `npm run dev:blockchain` y, en otra terminal desde la raíz:
+El módulo `blockchain/ignition/modules/VestingToken.ts` despliega el token `VDT` y acuña 1.000.000 de tokens para la primera cuenta de despliegue (`m.getAccount(0)`). El monto se puede cambiar con el parámetro `initialMintAmount`, expresado en unidades mínimas (18 decimales). Para desplegarlo en el nodo local, ejecutar `npm run dev:blockchain` y, en otra terminal desde la raíz:
 
 ```sh
 npm exec --workspace blockchain -- hardhat ignition deploy ignition/modules/VestingToken.ts --network localhost
