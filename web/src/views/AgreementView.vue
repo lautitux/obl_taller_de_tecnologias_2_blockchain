@@ -45,7 +45,7 @@ const eventPage = ref(1)
 
 const eventItems = computed(() =>
   [...events.value.entries()].sort(
-    ([, a], [, b]) => (Number(b.blockTimestamp ?? 0)) - (Number(a.blockTimestamp ?? 0)),
+    ([, a], [, b]) => Number(b.blockTimestamp ?? 0) - Number(a.blockTimestamp ?? 0),
   ),
 )
 
