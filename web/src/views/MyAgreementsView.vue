@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MyAgreementCard from '@/components/MyAgreementCard.vue'
 import { useSettings } from '@/composables/useSettings'
-import { useGetAgreementEvents } from '@/composables/useVesting'
+import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
 import { useConnection } from '@wagmi/vue'
 import type { Address } from 'viem'
 

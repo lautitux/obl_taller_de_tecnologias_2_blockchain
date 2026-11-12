@@ -2,11 +2,8 @@
 import AgreementStateChip from '@/components/AgreementStateChip.vue'
 import { useReadErc20 } from '@/composables/useErc20'
 import { useSettings } from '@/composables/useSettings'
-import {
-  useGetAgreementEvents,
-  useReadVestedAmount,
-  useReadVestingAgreement,
-} from '@/composables/useVesting'
+import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
+import { useReadVestedAmount, useReadVestingAgreement } from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementWithdrawal } from '@/types/agreement-event'
 import { formatUnits, type Address } from 'viem'
