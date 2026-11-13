@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.34;
 
-import {Vesting} from "./Vesting.sol";
+import {Vesting} from "../contracts/Vesting.sol";
 import {MockToken} from "./MockToken.t.sol";
 import {VestingTestBase} from "./Vesting.t.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";

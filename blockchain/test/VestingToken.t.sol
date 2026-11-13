@@ -2,7 +2,7 @@
 pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
-import {VestingToken} from "./VestingToken.sol";
+import {VestingToken} from "../contracts/VestingToken.sol";
 
 contract VestingTokenTest is Test {
     VestingToken internal token;
