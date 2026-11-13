@@ -290,9 +290,7 @@ contract VestingReentrancyTest is VestingTestBase {
         _assertAccounting(AMOUNT);
     }
 
-    function _checkClaimAfterCancellationRejected(
-        bool beforeTransfer
-    ) private {
+    function _checkClaimAfterCancellationRejected(bool beforeTransfer) private {
         _cancelAsPayer(agreementId);
         vm.warp(END_DATE);
         _prepareAttack(false, beforeTransfer, 1, 1, agreementId, HALF);
@@ -418,10 +416,7 @@ contract VestingReentrancyTest is VestingTestBase {
             assertTrue(reentrantToken.lastReentrySucceeded());
         }
         if (action == 3) {
-            assertEq(
-                reentrantToken.lastReentryReturnData(),
-                abi.encode(HALF)
-            );
+            assertEq(reentrantToken.lastReentryReturnData(), abi.encode(HALF));
         }
         if (action == 4) {
             (bool success, bytes memory finalState) = address(vesting)
