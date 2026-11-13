@@ -1,98 +1,79 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { useChainId, useConfig, useWatchContractEvent } from '@wagmi/vue'
+import { useChainId, useConfig } from '@wagmi/vue'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { isAddressEqual, type Address } from 'viem'
-import { vestingAbi } from '@/contracts/vestingAbi'
-import type {
-  AgreementEvent,
-  AgreementEventName,
-  ExtendedAgreementEvent,
-} from '@/types/agreement-event'
+import type { Address } from 'viem'
+import type { ExtendedAgreementEvent } from '@/types/agreement-event'
+import type { AgreementEventsQueryData } from '@/types/cached-event'
+import { getVestingDeploymentBlock } from '@/config/contract-deployments'
 import {
   cachedEventToExtendedEvent,
-  syncAgreementEvents,
-  type AgreementEventSearch,
+  matchesFilter,
+  syncContractEvents,
+  type AgreementEventFilter,
 } from '@/services/event-sync/event-sync-service'
-import type {
-  AgreementEventsQueryData,
-  CachedAgreementEvent,
-} from '@/types/cached-event'
+import { isPersistableChain, queryPersister } from '@/services/query-persistence'
 
-interface AgreementEventSearchInput {
+interface AgreementEventSearchInput extends AgreementEventFilter {
   address: Address
-  eventName?: AgreementEventName
-  agreementId?: bigint
-  payer?: Address
-  beneficiary?: Address
+}
+
+const EVENTS_QUERY_SCOPE = 'agreement-events'
+const REFRESH_INTERVAL = 12_000
+
+export function agreementEventsQueryKey(chainId: number, address: Address) {
+  return [EVENTS_QUERY_SCOPE, chainId, address.toLowerCase()] as const
+}
+
+export function agreementEventsBaseQueryKey() {
+  return [EVENTS_QUERY_SCOPE] as const
 }
 
 export function useGetAgreementEvents(
   agreementSearch: MaybeRefOrGetter<AgreementEventSearchInput>,
 ) {
-  const info = computed(() => toValue(agreementSearch))
+  const search = computed(() => toValue(agreementSearch))
   const chainId = useChainId()
   const config = useConfig()
   const queryClient = useQueryClient()
 
-  const queryKey = computed(() => [
-    'agreement-events',
-    chainId.value,
-    info.value.address.toLowerCase(),
-    info.value.eventName ?? 'all',
-    info.value.agreementId?.toString() ?? null,
-    info.value.payer?.toLowerCase() ?? null,
-    info.value.beneficiary?.toLowerCase() ?? null,
-  ] as const)
+  const deploymentBlock = computed(() => getVestingDeploymentBlock(chainId.value))
+  const queryKey = computed(() => agreementEventsQueryKey(chainId.value, search.value.address))
 
-  const query = useQuery(() => ({
+  const persist = computed(() => isPersistableChain(chainId.value))
+
+  const query = useQuery<AgreementEventsQueryData>(() => ({
     queryKey: queryKey.value,
+    enabled: deploymentBlock.value !== undefined && search.value.address !== undefined,
     queryFn: () => {
-      const previous = queryClient.getQueryData<AgreementEventsQueryData>(queryKey.value)
-      const search: AgreementEventSearch = {
-        ...info.value,
-        chainId: chainId.value,
-      }
-      return syncAgreementEvents(config, search, previous)
-    },
-    staleTime: 30_000,
-    gcTime: 7 * 24 * 60 * 60 * 1_000,
-    refetchOnWindowFocus: false,
-    retry: 2,
-  }))
-
-  useWatchContractEvent({
-    abi: vestingAbi,
-    strict: true,
-    address: computed(() => info.value.address),
-    eventName: computed(() => info.value.eventName),
-    onLogs(logs) {
-      queryClient.setQueryData<AgreementEventsQueryData | undefined>(
-        queryKey.value,
-        (current) => {
-          const events = new Map((current?.events ?? []).map((event) => [event.id, event]))
-          for (const log of logs) {
-            if (!matchesSearch(log.args, log.eventName, info.value)) continue
-            const event = logToCachedEvent(log, chainId.value, info.value.address)
-            events.set(event.id, event)
-          }
-
-          return {
-            events: [...events.values()].sort(compareEvents),
-            sync: current?.sync ?? {
-              oldestScannedBlock: eventBlock(logs[0]) ?? 0n,
-              newestScannedBlock: eventBlock(logs[0]) ?? 0n,
-              complete: false,
-            },
-          }
+      const key = queryKey.value
+      const shouldPersist = persist.value
+      return syncContractEvents(
+        config,
+        {
+          address: search.value.address,
+          chainId: chainId.value,
+          deploymentBlock: deploymentBlock.value ?? 0n,
+        },
+        queryClient.getQueryData<AgreementEventsQueryData>(key),
+        (partial) => {
+          queryClient.setQueryData(key, partial)
+          if (shouldPersist) void queryPersister.persistQueryByKey(key, queryClient)
         },
       )
     },
-  })
+    persister: persist.value ? queryPersister.persisterFn : undefined,
+    staleTime: REFRESH_INTERVAL,
+    refetchInterval: REFRESH_INTERVAL,
+    refetchOnWindowFocus: false,
+    retry: 3,
+    retryDelay: (attempt: number) => Math.min(2_000 * 2 ** attempt, 30_000),
+  }))
 
   const events = computed(() => {
+    const filter = search.value
     const mapped = new Map<string, ExtendedAgreementEvent>()
     for (const event of query.data.value?.events ?? []) {
-      mapped.set(event.id, cachedEventToExtendedEvent(event))
+      if (matchesFilter(event, filter)) mapped.set(event.id, cachedEventToExtendedEvent(event))
     }
     return mapped
   })
@@ -105,63 +86,4 @@ export function useGetAgreementEvents(
     error: query.error,
     refetch: query.refetch,
   }
-}
-
-function logToCachedEvent(
-  log: {
-    eventName: AgreementEventName
-    args: AgreementEvent
-    blockNumber?: bigint
-    blockHash?: `0x${string}` | null
-    transactionHash: `0x${string}`
-    logIndex: number
-    blockTimestamp?: bigint | null
-  },
-  chainId: number,
-  contractAddress: Address,
-): CachedAgreementEvent {
-  return {
-    id: `${log.transactionHash}:${log.logIndex}`,
-    chainId,
-    contractAddress,
-    eventName: log.eventName,
-    args: log.args,
-    blockNumber: log.blockNumber ?? 0n,
-    blockHash: log.blockHash ?? null,
-    transactionHash: log.transactionHash,
-    logIndex: log.logIndex,
-    blockTimestamp: log.blockTimestamp,
-  }
-}
-
-function eventBlock(log: { blockNumber?: bigint } | undefined): bigint | undefined {
-  return log?.blockNumber
-}
-
-function matchesSearch(
-  event: AgreementEvent,
-  eventName: AgreementEventName,
-  search: AgreementEventSearchInput,
-): boolean {
-  if (search.eventName !== undefined && search.eventName !== eventName) return false
-  if (search.agreementId !== undefined && event.agreementId !== search.agreementId) return false
-  if (
-    search.payer !== undefined &&
-    (!('payer' in event) || !isAddressEqual(search.payer, event.payer))
-  ) {
-    return false
-  }
-  if (
-    search.beneficiary !== undefined &&
-    !isAddressEqual(search.beneficiary, event.beneficiary)
-  ) {
-    return false
-  }
-  return true
-}
-
-function compareEvents(left: CachedAgreementEvent, right: CachedAgreementEvent): number {
-  if (left.blockNumber < right.blockNumber) return -1
-  if (left.blockNumber > right.blockNumber) return 1
-  return left.logIndex - right.logIndex
 }

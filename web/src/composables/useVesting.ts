@@ -1,14 +1,10 @@
 import { vestingAbi } from '@/contracts/vestingAbi'
+import { agreementEventsBaseQueryKey } from '@/composables/useAgreementEvents'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
 import type { TransactionReceipt } from '@/types/transaction'
 import { errorAsMessage, interpretError } from '@/utils/errors'
 import { useQueryClient } from '@tanstack/vue-query'
-import {
-  useChainId,
-  useConfig,
-  useReadContract,
-  useWriteContract,
-} from '@wagmi/vue'
+import { useChainId, useConfig, useReadContract, useWriteContract } from '@wagmi/vue'
 import {
   simulateContract,
   waitForTransactionReceipt,
@@ -17,13 +13,7 @@ import {
 } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
 import { maxUint256, type Address } from 'viem'
-import {
-  computed,
-  ref,
-  toValue,
-  type MaybeRefOrGetter,
-  type Ref,
-} from 'vue'
+import { computed, ref, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
 
 type VestingReadAgreementsRespones = readonly [
   payer: Address,
@@ -135,6 +125,7 @@ export function useCreateVestingAgreement(
   const { mutateAsync } = useWriteContract()
   const config = useConfig()
   const chainId = useChainId()
+  const queryClient = useQueryClient()
 
   const create = async () => {
     if (isCreating.value) return
@@ -172,6 +163,7 @@ export function useCreateVestingAgreement(
       }
 
       isCreated.value = true
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -235,6 +227,7 @@ export function useCancelVestingAgreement(
 
       isCancelled.value = true
       void queryClient.invalidateQueries({ queryKey: readAgreementKey })
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -302,6 +295,7 @@ export function useClaimVestedAmount(
       }
 
       isClaimed.value = true
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
       await queryClient.invalidateQueries({ queryKey: readAgreementKey })
     } catch (err) {
       error.value = err as Error
@@ -315,4 +309,3 @@ export function useClaimVestedAmount(
 
   return { claim, isClaiming, isClaimed, receipt, error, errorMessage }
 }
-

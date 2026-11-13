@@ -1,30 +1,30 @@
-import { getBlockNumber, getContractEvents } from '@wagmi/vue/actions'
+import { getBlock, getBlockNumber, getContractEvents } from '@wagmi/vue/actions'
 import type { Address, Hash } from 'viem'
 import { vestingAbi } from '@/contracts/vestingAbi'
-import { getVestingDeploymentBlock } from '@/config/contract-deployments'
 import type {
   AgreementEvent,
   AgreementEventName,
   ExtendedAgreementEvent,
 } from '@/types/agreement-event'
-import type {
-  AgreementEventsQueryData,
-  CachedAgreementEvent,
-  EventSyncState,
-} from '@/types/cached-event'
+import type { AgreementEventsQueryData, CachedAgreementEvent } from '@/types/cached-event'
 
 type Config = Parameters<typeof getBlockNumber>[0]
 
-const BLOCK_CHUNK_SIZE = 2_000n
+// Sepolia's default public RPC (thirdweb) rejects eth_getLogs ranges over 1,000 blocks.
+const BLOCK_CHUNK_SIZE = 1_000n
 const REORG_OVERLAP = 32n
 
-export interface AgreementEventSearch {
+export interface ContractEventSource {
   address: Address
   chainId: number
-  eventName?: AgreementEventName
-  agreementId?: bigint
-  payer?: Address
-  beneficiary?: Address
+  deploymentBlock: bigint
+}
+
+export interface AgreementEventFilter {
+  eventName?: AgreementEventName | undefined
+  agreementId?: bigint | undefined
+  payer?: Address | undefined
+  beneficiary?: Address | undefined
 }
 
 interface RawAgreementLog {
@@ -37,179 +37,161 @@ interface RawAgreementLog {
   blockTimestamp?: bigint | null
 }
 
-export async function syncAgreementEvents(
+/**
+ * Incrementally syncs all of the contract's events.
+ *
+ * - Without previous data: scans from the latest block down to the deployment block.
+ * - With previous data: fetches the new blocks (with an overlap to tolerate reorgs) and, if
+ *   the historical scan is incomplete, resumes it from `oldestScannedBlock`.
+ *
+ * `onProgress` is called after each chunk so partial progress is kept in the cache (and
+ * persisted) even if a later request fails due to RPC limits.
+ */
+export async function syncContractEvents(
   config: Config,
-  search: AgreementEventSearch,
-  previous?: AgreementEventsQueryData,
+  source: ContractEventSource,
+  previous: AgreementEventsQueryData | undefined,
+  onProgress: (data: AgreementEventsQueryData) => void,
 ): Promise<AgreementEventsQueryData> {
-  const latestBlock = await getBlockNumber(config, { chainId: search.chainId })
-  const deploymentBlock = getVestingDeploymentBlock(search.chainId)
-  let state = previous?.sync
-  let events = previous?.events ?? []
+  const latestBlock = await getBlockNumber(config, { chainId: source.chainId, cacheTime: 0 })
 
-  if (state === undefined) {
-    const result = await syncDescending(
-      config,
-      search,
-      latestBlock,
-      deploymentBlock,
-      events,
-      initialSyncState(latestBlock),
-    )
-    events = result.events
-    state = result.sync
-  } else {
+  let data: AgreementEventsQueryData = previous ?? {
+    events: [],
+    sync: {
+      oldestScannedBlock: latestBlock + 1n,
+      newestScannedBlock: latestBlock,
+      complete: false,
+    },
+  }
+
+  // 1. New blocks since the last sync.
+  if (previous !== undefined) {
+    const overlapStart = data.sync.newestScannedBlock - REORG_OVERLAP
     const refreshFrom =
-      state.newestScannedBlock > REORG_OVERLAP
-        ? state.newestScannedBlock - REORG_OVERLAP
-        : deploymentBlock
-
-    if (latestBlock >= refreshFrom) {
-      const result = await syncRange(
-        config,
-        search,
-        refreshFrom,
-        latestBlock,
-        events,
-        state,
-        deploymentBlock,
-      )
-      events = result.events
-      state = result.sync
-    }
-
-    if (!state.complete && refreshFrom > deploymentBlock) {
-      const result = await syncDescending(
-        config,
-        search,
-        refreshFrom - 1n,
-        deploymentBlock,
-        events,
-        state,
-      )
-      events = result.events
-      state = result.sync
+      overlapStart > source.deploymentBlock ? overlapStart : source.deploymentBlock
+    for (const [from, to] of ascendingChunks(refreshFrom, latestBlock)) {
+      data = await syncRange(config, source, from, to, data)
+      onProgress(data)
     }
   }
 
-  return {
-    events: events.filter((event) => matchesSearch(event, search)).sort(compareEvents),
-    sync: state,
+  // 2. Remaining history, in descending chunks from where the last scan stopped.
+  if (!data.sync.complete) {
+    const resumeFrom = data.sync.oldestScannedBlock - 1n
+    for (const [from, to] of descendingChunks(resumeFrom, source.deploymentBlock)) {
+      data = await syncRange(config, source, from, to, data)
+      onProgress(data)
+    }
+    data = { ...data, sync: { ...data.sync, complete: true } }
+  }
+
+  return data
+}
+
+function* ascendingChunks(from: bigint, to: bigint): Generator<[bigint, bigint]> {
+  for (let start = from; start <= to; start += BLOCK_CHUNK_SIZE) {
+    const end = start + BLOCK_CHUNK_SIZE - 1n
+    yield [start, end < to ? end : to]
   }
 }
 
-async function syncDescending(
-  config: Config,
-  search: AgreementEventSearch,
-  fromBlock: bigint,
-  deploymentBlock: bigint,
-  events: CachedAgreementEvent[],
-  state: EventSyncState,
-): Promise<AgreementEventsQueryData> {
-  let endBlock = fromBlock
-  let result = { events, sync: state }
-
-  while (endBlock >= deploymentBlock) {
-    const startBlock =
-      endBlock - BLOCK_CHUNK_SIZE + 1n > deploymentBlock
-        ? endBlock - BLOCK_CHUNK_SIZE + 1n
-        : deploymentBlock
-
-    result = await syncRange(
-      config,
-      search,
-      startBlock,
-      endBlock,
-      result.events,
-      result.sync,
-      deploymentBlock,
-    )
-    endBlock = startBlock - 1n
+function* descendingChunks(from: bigint, lowest: bigint): Generator<[bigint, bigint]> {
+  for (let end = from; end >= lowest; end -= BLOCK_CHUNK_SIZE) {
+    const start = end - BLOCK_CHUNK_SIZE + 1n
+    yield [start > lowest ? start : lowest, end]
   }
-
-  return result
 }
 
 async function syncRange(
   config: Config,
-  search: AgreementEventSearch,
+  source: ContractEventSource,
   fromBlock: bigint,
   toBlock: bigint,
-  currentEvents: CachedAgreementEvent[],
-  currentState: EventSyncState,
-  deploymentBlock: bigint,
+  current: AgreementEventsQueryData,
 ): Promise<AgreementEventsQueryData> {
-  if (fromBlock > toBlock) return { events: currentEvents, sync: currentState }
-
   const logs = (await getContractEvents(config, {
     abi: vestingAbi,
     strict: true,
-    chainId: search.chainId,
+    chainId: source.chainId,
+    address: source.address,
     fromBlock,
     toBlock,
-    address: search.address,
-    eventName: search.eventName,
   })) as RawAgreementLog[]
 
-  const rangeEvents = logs.map((log) => ({
+  const timestamps = await getBlockTimestamps(config, source.chainId, logs)
+
+  // Events in the range are fully replaced: if there was a reorg, the stale ones are dropped.
+  const byId = new Map(
+    current.events
+      .filter((event) => event.blockNumber < fromBlock || event.blockNumber > toBlock)
+      .map((event) => [event.id, event]),
+  )
+  for (const log of logs) {
+    const event = logToCachedEvent(log, source, timestamps.get(log.blockNumber))
+    byId.set(event.id, event)
+  }
+
+  const { sync } = current
+  return {
+    events: [...byId.values()].sort(compareEvents),
+    sync: {
+      oldestScannedBlock: fromBlock < sync.oldestScannedBlock ? fromBlock : sync.oldestScannedBlock,
+      newestScannedBlock: toBlock > sync.newestScannedBlock ? toBlock : sync.newestScannedBlock,
+      complete: sync.complete || fromBlock <= source.deploymentBlock,
+    },
+  }
+}
+
+async function getBlockTimestamps(
+  config: Config,
+  chainId: number,
+  logs: RawAgreementLog[],
+): Promise<Map<bigint, bigint>> {
+  const timestamps = new Map<bigint, bigint>()
+  for (const log of logs) {
+    if (log.blockTimestamp != null) timestamps.set(log.blockNumber, log.blockTimestamp)
+  }
+  for (const blockNumber of new Set(logs.map((log) => log.blockNumber))) {
+    if (timestamps.has(blockNumber)) continue
+    const block = await getBlock(config, { chainId, blockNumber })
+    timestamps.set(blockNumber, block.timestamp)
+  }
+  return timestamps
+}
+
+function logToCachedEvent(
+  log: RawAgreementLog,
+  source: ContractEventSource,
+  blockTimestamp: bigint | undefined,
+): CachedAgreementEvent {
+  return {
     id: `${log.transactionHash}:${log.logIndex}`,
-    chainId: search.chainId,
-    contractAddress: search.address,
+    chainId: source.chainId,
+    contractAddress: source.address,
     eventName: log.eventName,
     args: log.args,
     blockNumber: log.blockNumber,
     blockHash: log.blockHash,
     transactionHash: log.transactionHash,
     logIndex: log.logIndex,
-    blockTimestamp: log.blockTimestamp,
-  }))
-
-  const events = currentEvents.filter(
-    (event) => event.blockNumber < fromBlock || event.blockNumber > toBlock,
-  )
-  const byId = new Map(events.map((event) => [event.id, event]))
-  for (const event of rangeEvents) byId.set(event.id, event)
-
-  return {
-    events: [...byId.values()],
-    sync: {
-      oldestScannedBlock:
-        fromBlock < currentState.oldestScannedBlock
-          ? fromBlock
-          : currentState.oldestScannedBlock,
-      newestScannedBlock:
-        toBlock > currentState.newestScannedBlock
-          ? toBlock
-          : currentState.newestScannedBlock,
-      complete:
-        currentState.complete ||
-        (fromBlock <= deploymentBlock && toBlock >= deploymentBlock),
-    },
+    blockTimestamp: blockTimestamp ?? log.blockTimestamp ?? null,
   }
 }
 
-function initialSyncState(latestBlock: bigint): EventSyncState {
-  return {
-    oldestScannedBlock: latestBlock + 1n,
-    newestScannedBlock: latestBlock,
-    complete: false,
-  }
-}
-
-function matchesSearch(event: CachedAgreementEvent, search: AgreementEventSearch): boolean {
-  if (search.eventName !== undefined && event.eventName !== search.eventName) return false
-  if (search.agreementId !== undefined && event.args.agreementId !== search.agreementId) {
+export function matchesFilter(event: CachedAgreementEvent, filter: AgreementEventFilter): boolean {
+  if (filter.eventName !== undefined && event.eventName !== filter.eventName) return false
+  if (filter.agreementId !== undefined && event.args.agreementId !== filter.agreementId) {
     return false
   }
   if (
-    search.payer !== undefined &&
-    (!('payer' in event.args) || event.args.payer.toLowerCase() !== search.payer.toLowerCase())
+    filter.payer !== undefined &&
+    (!('payer' in event.args) || event.args.payer.toLowerCase() !== filter.payer.toLowerCase())
   ) {
     return false
   }
   if (
-    search.beneficiary !== undefined &&
-    event.args.beneficiary.toLowerCase() !== search.beneficiary.toLowerCase()
+    filter.beneficiary !== undefined &&
+    event.args.beneficiary.toLowerCase() !== filter.beneficiary.toLowerCase()
   ) {
     return false
   }
