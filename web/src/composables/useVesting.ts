@@ -1,38 +1,19 @@
 import { vestingAbi } from '@/contracts/vestingAbi'
+import { agreementEventsBaseQueryKey } from '@/composables/useAgreementEvents'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
-import type {
-  AgreementEvent,
-  AgreementEventName,
-  ExtendedAgreementEvent,
-} from '@/types/agreement-event'
 import type { TransactionReceipt } from '@/types/transaction'
 import { errorAsMessage, interpretError } from '@/utils/errors'
 import { useQueryClient } from '@tanstack/vue-query'
+import { useChainId, useConfig, useReadContract, useWriteContract } from '@wagmi/vue'
 import {
-  useChainId,
-  useConfig,
-  useReadContract,
-  useWatchContractEvent,
-  useWriteContract,
-} from '@wagmi/vue'
-import {
-  getContractEvents,
   simulateContract,
   waitForTransactionReceipt,
   writeContract,
   type WriteContractErrorType,
 } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
-import { isAddressEqual, maxUint256, type Address } from 'viem'
-import {
-  computed,
-  onWatcherCleanup,
-  ref,
-  toValue,
-  watch,
-  type MaybeRefOrGetter,
-  type Ref,
-} from 'vue'
+import { maxUint256, type Address } from 'viem'
+import { computed, ref, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
 
 type VestingReadAgreementsRespones = readonly [
   payer: Address,
@@ -144,6 +125,7 @@ export function useCreateVestingAgreement(
   const { mutateAsync } = useWriteContract()
   const config = useConfig()
   const chainId = useChainId()
+  const queryClient = useQueryClient()
 
   const create = async () => {
     if (isCreating.value) return
@@ -181,6 +163,7 @@ export function useCreateVestingAgreement(
       }
 
       isCreated.value = true
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -244,6 +227,7 @@ export function useCancelVestingAgreement(
 
       isCancelled.value = true
       void queryClient.invalidateQueries({ queryKey: readAgreementKey })
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -311,6 +295,7 @@ export function useClaimVestedAmount(
       }
 
       isClaimed.value = true
+      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
       await queryClient.invalidateQueries({ queryKey: readAgreementKey })
     } catch (err) {
       error.value = err as Error
@@ -323,101 +308,4 @@ export function useClaimVestedAmount(
   }
 
   return { claim, isClaiming, isClaimed, receipt, error, errorMessage }
-}
-
-interface VestingSearchAgreementsInfo {
-  address: Address
-  eventName?: AgreementEventName
-  agreementId?: bigint | undefined
-  payer?: Address | undefined
-  beneficiary?: Address | undefined
-}
-
-export function useGetAgreementEvents(
-  vestingSearchAgreementsInfo: MaybeRefOrGetter<VestingSearchAgreementsInfo>,
-) {
-  const info = computed(() => toValue(vestingSearchAgreementsInfo))
-  const address = computed(() => info.value.address)
-  const eventName = computed(() => info.value.eventName)
-  const agreementId = computed(() => info.value.agreementId)
-  const payer = computed(() => info.value.payer)
-  const beneficiary = computed(() => info.value.beneficiary)
-
-  const events = ref(new Map<string, ExtendedAgreementEvent>())
-
-  useWatchContractEvent({
-    abi: vestingAbi,
-    strict: true,
-    address,
-    eventName,
-    onLogs(logs) {
-      for (const log of logs) {
-        if (eventName.value !== undefined && eventName.value !== log.eventName) continue
-
-        const id = `${log.transactionHash}:${log.logIndex}`
-        const event: AgreementEvent = log.args
-
-        if (agreementId.value !== undefined && agreementId.value !== event.agreementId) continue
-        if (
-          payer.value !== undefined &&
-          (!('payer' in event) || !isAddressEqual(payer.value, event.payer))
-        )
-          continue
-        if (
-          beneficiary.value !== undefined &&
-          !isAddressEqual(beneficiary.value, event.beneficiary)
-        )
-          continue
-
-        events.value.set(id, {
-          ...event,
-          eventName: log.eventName,
-          blockTimestamp: log.blockTimestamp,
-        })
-      }
-    },
-  })
-
-  const config = useConfig()
-  const chainId = useChainId()
-
-  watch(
-    [info, chainId],
-    () => {
-      let stale = false
-      events.value.clear()
-      getContractEvents(config, {
-        abi: vestingAbi,
-        strict: true,
-        chainId: chainId.value,
-        fromBlock: 'earliest',
-        toBlock: 'latest',
-        address: address.value,
-        eventName: eventName.value,
-        args: {
-          agreementId: agreementId.value,
-          payer: payer.value,
-          beneficiary: beneficiary.value,
-        },
-      }).then((logs) => {
-        if (stale) return
-        for (const log of logs) {
-          const id = `${log.transactionHash}:${log.logIndex}`
-          const event: AgreementEvent = log.args
-          events.value.set(id, {
-            ...event,
-            eventName: log.eventName,
-            blockTimestamp: log.blockTimestamp,
-          })
-        }
-      })
-
-      onWatcherCleanup(() => {
-        stale = true
-      })
-    },
-    { immediate: true },
-  )
-
-  return { events }
 }

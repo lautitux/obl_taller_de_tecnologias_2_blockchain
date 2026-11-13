@@ -13,7 +13,7 @@ export const settingsFields: readonly SettingField[] = [
     key: 'contractAddress',
     name: 'Dirección del contrato',
     description: 'Dirección del contrato de acuerdos desplegado en la red que vas a usar.',
-    defaultValue: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+    defaultValue: '0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18',
     rules: addressRules,
   },
 ]

@@ -11,6 +11,7 @@ import { WagmiPlugin } from '@wagmi/vue'
 import { wagmiConfig } from './wagmi-config'
 
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import { queryPersister } from './services/query-persistence'
 
 const app = createApp(App)
 
@@ -38,3 +39,9 @@ const queryClient = new QueryClient()
 app.use(VueQueryPlugin, { queryClient })
 
 app.mount('#app')
+
+// Las queries persistidas se restauran de forma lazy al usarse; acá solo se borran en
+// segundo plano los registros vencidos o de una versión anterior del cache.
+queryPersister.persisterGc().catch((error: unknown) => {
+  console.warn('No se pudo limpiar el cache persistido de eventos.', error)
+})
