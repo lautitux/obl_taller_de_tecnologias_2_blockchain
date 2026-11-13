@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.34;
 
-import {Vesting} from "./Vesting.sol";
+import {Vesting} from "../contracts/Vesting.sol";
+import {MockToken} from "./MockToken.t.sol";
 import {Test} from "forge-std/Test.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-
-contract MockToken is ERC20 {
-    constructor() ERC20("Mock Token", "MOCK") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
 
 abstract contract VestingTestBase is Test {
     uint256 internal constant TODAY = 1_792_977_722;
