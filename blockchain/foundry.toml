@@ -1,0 +1,20 @@
+[profile.default]
+src = "contracts"
+test = "test"
+script = "scripts"
+out = "out"
+cache_path = "cache_forge"
+libs = ["../node_modules", "node_modules"]
+auto_detect_remappings = false
+remappings = [
+    "@nomicfoundation/=../node_modules/@nomicfoundation/",
+    "@openzeppelin/=../node_modules/@openzeppelin/",
+    "forge-std/=../node_modules/forge-std/src/",
+    "hardhat/=../node_modules/hardhat/"
+]
+
+[lint]
+# Forge exclusions only: Prettier checks every Solidity file, including tests.
+ignore = ["**/*.t.sol", "test/**", "tests/**", "contracts/mocks/**", "contracts/helpers/**"]
+severity = ["high", "med", "low", "info", "gas"]
+lint_on_build = false

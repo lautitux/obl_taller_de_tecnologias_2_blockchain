@@ -1,14 +1,43 @@
 {
   "name": "obligatorio",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "workspaces": [
+    "blockchain",
+    "web"
+  ],
+  "engines": {
+    "node": "^22.18.0 || >=24.12.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:web --",
+    "dev:web": "npm run dev --workspace web --",
+    "dev:blockchain": "npm run dev --workspace blockchain --",
+    "build": "npm run build --workspaces --",
+    "build:blockchain": "npm run build --workspace blockchain --",
+    "build:web": "npm run build --workspace web --",
+    "typecheck": "npm run typecheck --workspaces --",
+    "typecheck:blockchain": "npm run typecheck --workspace blockchain --",
+    "typecheck:web": "npm run typecheck --workspace web --",
+    "test": "npm run test:blockchain --",
+    "test:blockchain": "npm run test --workspace blockchain --",
+    "test:solidity": "npm run test:solidity --workspace blockchain --",
+    "test:typescript": "npm run test:typescript --workspace blockchain --",
+    "test:coverage": "npm run test:coverage --workspace blockchain --",
+    "coverage:clean": "npm run coverage:clean --workspace blockchain --",
+    "coverage:check": "npm run coverage:check --workspace blockchain --",
+    "lint": "npm run lint --workspaces --",
+    "lint:blockchain": "npm run lint --workspace blockchain --",
+    "lint:web": "npm run lint --workspace web --",
+    "lint:fix:web": "npm run lint:fix --workspace web --",
+    "lint:advisory:blockchain": "npm run lint:advisory --workspace blockchain --",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview:web": "npm run preview --workspace web --"
+  },
   "devDependencies": {
-    "@nomicfoundation/hardhat-ignition": "^3.1.9",
-    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
-    "@types/node": "^22.20.5",
-    "forge-std": "github:foundry-rs/forge-std#v1.16.2",
-    "hardhat": "^3.21.0",
-    "typescript": "~6.0.3",
-    "viem": "^2.57.11"
+    "prettier": "^3.9.10",
+    "prettier-plugin-solidity": "^2.4.1"
   }
 }
