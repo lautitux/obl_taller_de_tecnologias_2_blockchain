@@ -2,7 +2,7 @@
 import { computed, reactive, shallowRef } from 'vue'
 import { useAgreementPeriod } from '@/composables/useAgreementPeriod'
 import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreementRules'
-import { useChains, useConnection } from '@wagmi/vue'
+import { useConnection } from '@wagmi/vue'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useApproveErc20,
@@ -12,6 +12,7 @@ import {
 } from '@/composables/useErc20'
 import { getAddress, isAddress, type Address } from 'viem'
 import { useCreateVestingAgreement } from '@/composables/useVesting'
+import TransactionLink from '@/components/TransactionLink.vue'
 const { isConnected, isDisconnected, address: clientAddress } = useConnection()
 
 const formValid = shallowRef<boolean | null>(null)
@@ -56,12 +57,6 @@ const {
   receipt: approvalTransaction,
   errorMessage: approvalError,
 } = useApproveErc20(tokenAddress)
-
-const chains = useChains()
-const explorer = computed(() => {
-  const currentChain = chains.value.find((chain) => chain.id === approvalTransaction.value?.chainId)
-  return currentChain?.blockExplorers?.default
-})
 
 const {
   create: createAgreement,
@@ -290,8 +285,7 @@ const revocabilityHint = computed(() =>
               >{{ hasEnoughAllowance ? 'Tokens aprobados' : 'Aprobar tokens' }}</v-btn
             >
             <v-alert v-if="isApproving" type="info" variant="tonal" class="mt-4" aria-live="polite">
-              <!-- {{ approvalStatus }} -->
-              TODO
+              Confirmá la transacción en tu billetera y esperá a que se complete.
             </v-alert>
             <v-alert
               v-else-if="hasEnoughAllowance"
@@ -313,14 +307,10 @@ const revocabilityHint = computed(() =>
             </v-alert>
             <p v-if="approvalTransaction" class="text-body-2 text-break mt-4">
               Transacción:
-              <a
-                v-if="explorer"
-                :href="`${explorer.url}/tx/${approvalTransaction.transactionHash}`"
-                target="_blank"
-                rel="noopener noreferrer"
-                >{{ approvalTransaction.transactionHash }}</a
-              >
-              <span v-else>{{ approvalTransaction.transactionHash }}</span>
+              <TransactionLink
+                :chainId="approvalTransaction.chainId"
+                :transactionHash="approvalTransaction.transactionHash"
+              />
             </p>
 
             <v-divider class="my-6" />
@@ -340,12 +330,9 @@ const revocabilityHint = computed(() =>
             >
               {{ isCreated ? 'Acuerdo creado' : 'Crear acuerdo' }}
             </v-btn>
-
             <v-alert v-if="isCreating" type="info" variant="tonal" class="mt-4" aria-live="polite">
-              <!-- {{ creationStatus }} -->
-              TODO
+              Confirmá la transacción en tu billetera y esperá a que se complete.
             </v-alert>
-
             <v-alert
               v-else-if="isCreated"
               type="success"
@@ -368,7 +355,11 @@ const revocabilityHint = computed(() =>
             </v-alert>
 
             <p v-if="creationTransaction" class="text-body-2 text-break mt-4">
-              Transacción: {{ creationTransaction.transactionHash }}
+              Transacción:
+              <TransactionLink
+                :chainId="creationTransaction.chainId"
+                :transactionHash="creationTransaction.transactionHash"
+              />
             </p>
           </v-card-text>
         </v-card>
