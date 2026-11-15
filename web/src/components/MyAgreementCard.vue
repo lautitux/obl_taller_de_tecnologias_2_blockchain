@@ -100,9 +100,14 @@ async function onClaim() {
   emit('claim', event.agreementId, availableAmount.value)
 }
 
+const RELOAD_COOLDOWN_MS = 5_000
 const isReloading = shallowRef(false)
+const lastReloadAt = shallowRef(0)
+const canReload = computed(() => now.value - lastReloadAt.value >= RELOAD_COOLDOWN_MS)
 
 async function onReload() {
+  if (!canReload.value) return
+  lastReloadAt.value = Date.now()
   isReloading.value = true
   try {
     await Promise.all([refetchAgreement(), refetchVested()])
@@ -121,7 +126,9 @@ async function onReload() {
         v-if="showReloadButton"
         icon="mdi-reload"
         variant="text"
+        aria-label="Recargar acuerdo"
         :loading="isReloading"
+        :disabled="!canReload"
         @click="onReload"
       />
       <AgreementStateChip
