@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConnection } from '@wagmi/vue'
+
 const sections = [
   {
     title: 'Crear acuerdo',
@@ -24,6 +26,8 @@ const sections = [
     detail: 'Consultá lo devengado, lo ya reclamado y el monto disponible para reclamar.',
   },
 ]
+
+const { isDisconnected } = useConnection()
 </script>
 
 <template>
@@ -37,9 +41,14 @@ const sections = [
       </p>
     </header>
 
-    <v-alert type="info" title="Tu espacio de acuerdos" class="mb-6">
-      Conectá tu billetera para crear acuerdos y consultar su evolución. La sección Mis ingresos
-      estará disponible próximamente.
+    <v-alert
+      v-if="isDisconnected"
+      type="info"
+      variant="tonal"
+      title="Tu espacio de acuerdos"
+      class="mb-6"
+    >
+      Conectá tu billetera para crear acuerdos y consultar su evolución.
     </v-alert>
 
     <section aria-labelledby="sections-title">
