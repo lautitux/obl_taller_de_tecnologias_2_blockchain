@@ -7,7 +7,15 @@ import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
 import { simulateContract, writeContract } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
-import { erc20Abi, maxUint256, parseUnits, type Address } from 'viem'
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  erc20Abi,
+  maxUint256,
+  parseUnits,
+  type Address,
+} from 'viem'
 import {
   ref,
   toValue,
@@ -37,6 +45,19 @@ export function invalidateErc20Allowances(
   })
 }
 
+function isNotErc20Error(error: unknown): boolean {
+  return (
+    error instanceof BaseError &&
+    error.walk(
+      (e) =>
+        e instanceof ContractFunctionZeroDataError || e instanceof ContractFunctionRevertedError,
+    ) !== null
+  )
+}
+
+const retryUnlessNotErc20 = (failureCount: number, error: unknown) =>
+  !isNotErc20Error(error) && failureCount < 3
+
 export function useReadErc20(
   address: MaybeRef<Address | undefined>,
   options: Erc20ReadOptions = {},
@@ -52,7 +73,7 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'name',
-    query: { enabled },
+    query: { enabled, retry: retryUnlessNotErc20 },
   })
 
   const {
@@ -63,7 +84,7 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'symbol',
-    query: { enabled },
+    query: { enabled, retry: retryUnlessNotErc20 },
   })
 
   const {
@@ -74,12 +95,14 @@ export function useReadErc20(
     abi: erc20Abi,
     address,
     functionName: 'decimals',
-    query: { enabled },
+    query: { enabled, retry: retryUnlessNotErc20 },
   })
 
   const isLoading = computed(
     () => nameIsLoading.value || symbolIsLoading.value || decimalsIsLoading.value,
   )
+
+  const isNotFound = computed(() => isNotErc20Error(decimalsError.value))
 
   return {
     name,
@@ -88,6 +111,7 @@ export function useReadErc20(
     nameError,
     symbolError,
     decimalsError,
+    isNotFound,
     isLoading,
     nameIsLoading,
     symbolIsLoading,
