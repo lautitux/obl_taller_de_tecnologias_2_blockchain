@@ -3,7 +3,7 @@ import { computed, reactive, shallowRef } from 'vue'
 import { useAgreementPeriod } from '@/composables/useAgreementPeriod'
 import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreementRules'
 import { useChains, useConnection } from '@wagmi/vue'
-import { useSettings } from '@/composables/useSettings'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useApproveErc20,
   useParseAmountErc20,
@@ -28,25 +28,22 @@ const agreement = reactive({
 })
 
 const { startDate, endDate, periodError } = useAgreementPeriod(agreement)
-const { settings } = useSettings()
+const { contractAddress } = useVestingDeployment()
 
-const { decimals: tokenDecimals } = useReadErc20(() => ({
-  address: agreement.token as Address,
-  enabled: isAddress(agreement.token),
-}))
+const tokenAddress = computed(() => (isAddress(agreement.token) ? agreement.token : undefined))
 
-const { allowance: tokenAllowance, refresh: refreshAllowance } = useReadAllowanceErc20(() => ({
-  address: agreement.token as Address,
-  owner: clientAddress.value as Address,
-  spender: settings.contractAddress as Address,
-  enabled:
-    isConnected.value && isAddress(agreement.token) && isAddress(settings.contractAddress ?? ''),
-}))
+const { decimals: tokenDecimals } = useReadErc20(tokenAddress)
 
-const { amount: tokenAmount } = useParseAmountErc20(() => ({
-  amountString: agreement.totalAmount,
-  decimals: tokenDecimals.value ?? 0,
-}))
+const { allowance: tokenAllowance, refresh: refreshAllowance } = useReadAllowanceErc20(
+  tokenAddress,
+  clientAddress,
+  contractAddress,
+)
+
+const { amount: tokenAmount } = useParseAmountErc20(
+  () => agreement.totalAmount,
+  () => tokenDecimals.value ?? 0,
+)
 const hasEnoughAllowance = computed(() =>
   Boolean(tokenAllowance.value && tokenAmount.value && tokenAllowance.value >= tokenAmount.value),
 )
@@ -57,11 +54,7 @@ const {
   isApproved,
   receipt: approvalTransaction,
   errorMessage: approvalError,
-} = useApproveErc20(() => ({
-  address: agreement.token as Address,
-  spender: settings.contractAddress as Address,
-  value: tokenDecimals.value != null ? tokenAmount.value : null,
-}))
+} = useApproveErc20(tokenAddress)
 
 const chains = useChains()
 const explorer = computed(() => {
@@ -75,24 +68,14 @@ const {
   isCreated,
   receipt: creationTransaction,
   errorMessage: creationError,
-} = useCreateVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  configuration: {
-    beneficiary: agreement.beneficiary as Address,
-    token: agreement.token as Address,
-    totalAmount: tokenAmount.value ?? 0n,
-    startDate: BigInt((startDate.value?.getTime() ?? 0) / 1000),
-    endDate: BigInt((endDate.value?.getTime() ?? 0) / 1000),
-    revocable: agreement.revocable as boolean,
-  },
-}))
+} = useCreateVestingAgreement(contractAddress)
 
 const isRefreshingAllowance = shallowRef(false)
 const canSubmit = computed(
   () =>
     isConnected.value &&
     formValid.value === true &&
-    isAddress(settings.contractAddress ?? '') &&
+    contractAddress.value !== undefined &&
     !periodError.value &&
     startDate.value != null &&
     endDate.value != null &&
@@ -110,16 +93,23 @@ async function handleApprove() {
   if (!canApprove.value) return
   isRefreshingAllowance.value = true
   try {
-    await approveTokens()
+    await approveTokens(contractAddress.value, tokenAmount.value)
     if (isApproved.value) await refreshAllowance()
   } finally {
     isRefreshingAllowance.value = false
   }
 }
 
-async function handleCreate() {
+async function onCreate() {
   if (!canCreate.value) return
-  await createAgreement()
+  await createAgreement({
+    beneficiary: agreement.beneficiary as Address,
+    token: agreement.token as Address,
+    totalAmount: tokenAmount.value ?? 0n,
+    startDate: BigInt((startDate.value?.getTime() ?? 0) / 1000),
+    endDate: BigInt((endDate.value?.getTime() ?? 0) / 1000),
+    revocable: agreement.revocable,
+  })
 }
 
 const timeFields = [
@@ -353,7 +343,7 @@ const revocabilityHint = computed(() =>
               :disabled="!canCreate"
               :loading="isCreating"
               prepend-icon="mdi-file-document-plus-outline"
-              @click="handleCreate"
+              @click="onCreate"
             >
               {{ isCreated ? 'Acuerdo creado' : 'Crear acuerdo' }}
             </v-btn>

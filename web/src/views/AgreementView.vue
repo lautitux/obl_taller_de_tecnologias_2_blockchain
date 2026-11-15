@@ -1,42 +1,29 @@
 <script setup lang="ts">
 import AgreementStateChip from '@/components/AgreementStateChip.vue'
 import { useReadErc20 } from '@/composables/useErc20'
-import { useSettings } from '@/composables/useSettings'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
 import { useReadVestedAmount, useReadVestingAgreement } from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementWithdrawal } from '@/types/agreement-event'
-import { formatUnits, type Address } from 'viem'
+import { formatUnits } from 'viem'
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const agreementId = computed(() => BigInt((route.params.id ?? '') as string))
 
-const { settings } = useSettings()
+const { contractAddress } = useVestingDeployment()
 
-const { agreement } = useReadVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: agreementId.value,
-}))
+const { agreement } = useReadVestingAgreement(contractAddress, agreementId)
+const { vestedAmount } = useReadVestedAmount(contractAddress, agreementId)
 
-const { vestedAmount } = useReadVestedAmount(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: agreementId.value,
-}))
+const tokenAddress = computed(() => agreement.value?.configuration.token)
+const { name: tokenName, symbol, decimals } = useReadErc20(tokenAddress)
 
-const {
-  name: tokenName,
-  symbol,
-  decimals,
-} = useReadErc20(() => ({
-  address: agreement.value?.configuration.token as Address,
-}))
-
-const { events } = useGetAgreementEvents(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: agreementId.value,
-}))
+const { events } = useGetAgreementEvents(contractAddress, {
+  filter: () => ({ agreementId: agreementId.value }),
+})
 
 const eventPage = ref(1)
 

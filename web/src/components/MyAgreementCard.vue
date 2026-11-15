@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useReadErc20 } from '@/composables/useErc20'
-import { useSettings } from '@/composables/useSettings'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useCancelVestingAgreement,
   useClaimVestedAmount,
@@ -10,7 +10,7 @@ import {
 import { AgreementState } from '@/types/agreement'
 import type { AgreementEvent } from '@/types/agreement-event'
 import { useConnection } from '@wagmi/vue'
-import { formatUnits, isAddressEqual, type Address } from 'viem'
+import { formatUnits, isAddressEqual } from 'viem'
 import { computed, shallowRef } from 'vue'
 import AgreementStateChip from './AgreementStateChip.vue'
 
@@ -40,41 +40,27 @@ const emit = defineEmits<{
   claim: [agreementId: bigint, availableAmount: bigint]
 }>()
 
-const { settings } = useSettings()
+const { contractAddress } = useVestingDeployment()
+const agreementId = () => event.agreementId
 
 const {
   agreement,
   isLoading,
   refetch: refetchAgreement,
-} = useReadVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+} = useReadVestingAgreement(contractAddress, agreementId)
 
-const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(contractAddress, agreementId)
 
-const { symbol, decimals } = useReadErc20(() => ({
-  address: agreement.value?.configuration.token as Address,
-  enabled: agreement.value != undefined,
-}))
+const tokenAddress = computed(() => agreement.value?.configuration.token)
+const { symbol, decimals } = useReadErc20(tokenAddress)
 
-const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(contractAddress)
 
 const availableAmount = computed(
   () => (vestedAmount?.value ?? 0n) - (agreement.value?.alreadyWithdrawnAmount ?? 0n),
 )
 
-const { claim, isClaiming } = useClaimVestedAmount(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-  amount: availableAmount.value,
-}))
+const { claim, isClaiming } = useClaimVestedAmount(contractAddress)
 
 const { address } = useConnection()
 
@@ -102,12 +88,12 @@ const canClaim = computed(() =>
 )
 
 async function onCancel() {
-  await cancel()
+  await cancel(event.agreementId)
   emit('cancel', event.agreementId)
 }
 
 async function onClaim() {
-  await claim()
+  await claim(event.agreementId, availableAmount.value)
   await refetchVested()
   emit('claim', event.agreementId, availableAmount.value)
 }

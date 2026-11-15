@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
 import CreateAgreementView from '@/views/CreateAgreementView.vue'
-import SettingsView from '@/views/SettingsView.vue'
 import MyAgreementsView from '@/views/MyAgreementsView.vue'
 import MyBenefitsView from '@/views/MyBenefitsView.vue'
 import AgreementView from '@/views/AgreementView.vue'
@@ -23,11 +22,6 @@ const router = createRouter({
       path: '/benefit',
       name: 'my-benefit',
       component: MyBenefitsView,
-    },
-    {
-      path: '/settings',
-      name: 'settings',
-      component: SettingsView,
     },
     {
       path: '/',

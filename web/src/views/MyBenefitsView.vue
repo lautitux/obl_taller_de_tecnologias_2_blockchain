@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import MyAgreementCard from '@/components/MyAgreementCard.vue'
-import { useSettings } from '@/composables/useSettings'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
 import { useConnection } from '@wagmi/vue'
-import type { Address } from 'viem'
 
-const { settings } = useSettings()
+const { contractAddress } = useVestingDeployment()
 const { address, isDisconnected } = useConnection()
-const { events: agreementEvents } = useGetAgreementEvents(() => ({
-  address: settings.contractAddress as Address,
-  eventName: 'AgreementCreated',
-  beneficiary: address.value,
-}))
+const { events: agreementEvents } = useGetAgreementEvents(contractAddress, {
+  filter: () => ({ eventName: 'AgreementCreated', beneficiary: address.value }),
+  enabled: () => address.value !== undefined,
+})
 </script>
 
 <template>
