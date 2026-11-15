@@ -59,7 +59,7 @@ const { isDisconnected } = useConnection()
             <template #title>
               <h3 class="text-h6">{{ section.title }}</h3>
             </template>
-            <template v-if="section.to" #append>
+            <template #append>
               <v-btn
                 :to="section.to"
                 icon="mdi-arrow-top-right"
@@ -70,9 +70,6 @@ const { isDisconnected } = useConnection()
             <v-card-text>
               <p>{{ section.description }}</p>
               <p class="mt-4">{{ section.detail }}</p>
-              <v-chip v-if="!section.to" size="small" prepend-icon="mdi-clock-outline" class="mt-4">
-                Próximamente
-              </v-chip>
             </v-card-text>
           </v-card>
         </v-col>

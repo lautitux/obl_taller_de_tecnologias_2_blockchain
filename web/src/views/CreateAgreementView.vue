@@ -35,7 +35,20 @@ const tokenAddress = computed(() =>
   isAddress(agreement.token) ? getAddress(agreement.token) : undefined,
 )
 
-const { decimals: tokenDecimals } = useReadErc20(tokenAddress)
+const {
+  decimals: tokenDecimals,
+  decimalsError: tokenError,
+  isNotFound: isTokenNotFound,
+} = useReadErc20(tokenAddress)
+
+// Without this the approve button just stays disabled and the user can't tell why.
+const tokenErrorMessage = computed(() => {
+  if (isTokenNotFound.value) {
+    return 'No hay un token ERC-20 en esa dirección en la red actual. Revisá la dirección y la red de tu billetera.'
+  }
+  if (tokenError.value) return 'No se pudo leer el token. Revisá tu conexión e intentá de nuevo.'
+  return null
+})
 
 const { allowance: tokenAllowance } = useReadAllowanceErc20(
   tokenAddress,
@@ -164,6 +177,16 @@ const revocabilityHint = computed(() =>
                 required
                 class="mt-4"
               />
+              <v-alert
+                v-if="tokenErrorMessage"
+                type="error"
+                variant="tonal"
+                density="compact"
+                class="mt-2"
+                aria-live="polite"
+              >
+                {{ tokenErrorMessage }}
+              </v-alert>
 
               <v-text-field
                 v-model="agreement.totalAmount"

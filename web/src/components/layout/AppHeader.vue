@@ -8,6 +8,8 @@ defineProps<{ navigationOpen: boolean }>()
 const emit = defineEmits<{ toggleNavigation: [] }>()
 
 const { mdAndUp } = useDisplay()
+
+const logoUrl = `${import.meta.env.BASE_URL}favicon.svg`
 </script>
 
 <template>
@@ -19,7 +21,12 @@ const { mdAndUp } = useDisplay()
       :aria-expanded="navigationOpen"
       @click="emit('toggleNavigation')"
     />
-    <v-app-bar-title>Acuerdos</v-app-bar-title>
+    <v-app-bar-title>
+      <router-link :to="{ name: 'home' }" class="app-brand">
+        <img :src="logoUrl" alt="" width="28" height="28" />
+        <span>Acuerdos</span>
+      </router-link>
+    </v-app-bar-title>
 
     <template v-if="mdAndUp">
       <AccountChip :compact="!mdAndUp" />
@@ -35,3 +42,13 @@ const { mdAndUp } = useDisplay()
     </template>
   </v-app-bar>
 </template>
+
+<style scoped>
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+</style>

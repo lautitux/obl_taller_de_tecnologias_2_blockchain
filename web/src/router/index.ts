@@ -5,6 +5,9 @@ import CreateAgreementView from '@/views/CreateAgreementView.vue'
 import MyAgreementsView from '@/views/MyAgreementsView.vue'
 import MyBenefitsView from '@/views/MyBenefitsView.vue'
 import AgreementView from '@/views/AgreementView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
+import { notFoundLocation } from '@/router/not-found'
+import { AGREEMENT_ID_PATTERN, parseAgreementId } from '@/utils/agreement-id'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -15,9 +18,11 @@ const router = createRouter({
       component: MyAgreementsView,
     },
     {
-      path: '/agreements/:id',
+      path: `/agreements/:id(${AGREEMENT_ID_PATTERN})`,
       name: 'agreement',
       component: AgreementView,
+      beforeEnter: (to) =>
+        parseAgreementId(to.params.id) === undefined ? notFoundLocation(to) : true,
     },
     {
       path: '/benefits',
@@ -33,6 +38,11 @@ const router = createRouter({
       path: '/agreements/create',
       name: 'create-agreement',
       component: CreateAgreementView,
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
     },
   ],
 })
