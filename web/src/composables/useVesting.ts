@@ -10,7 +10,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
 import { simulateContract, writeContract } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
-import { maxUint256, type Address } from 'viem'
+import { maxUint256, zeroAddress, type Address } from 'viem'
 import { computed, toValue, unref, type MaybeRef, type MaybeRefOrGetter, type Ref } from 'vue'
 
 type VestingReadAgreementsRespones = readonly [
@@ -75,15 +75,19 @@ export function useReadVestingAgreement(
     query: { enabled },
   })
 
+  const isNotFound = computed(
+    () => isSuccess.value && data.value != null && data.value[1].beneficiary === zeroAddress,
+  )
+
   const agreement: Ref<Agreement | undefined> = computed(() => {
-    if (isSuccess.value && data.value != null) {
+    if (isSuccess.value && data.value != null && !isNotFound.value) {
       return vestingReadAgreementsResponseToAgreement(data.value)
     } else {
       return undefined
     }
   })
 
-  return { agreement, isLoading, isError, error, refetch }
+  return { agreement, isNotFound, isLoading, isError, error, refetch }
 }
 
 function vestingReadAgreementsResponseToAgreement(

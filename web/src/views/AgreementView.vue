@@ -7,15 +7,26 @@ import { useReadVestedAmount, useReadVestingAgreement } from '@/composables/useV
 import { AgreementState } from '@/types/agreement'
 import type { AgreementWithdrawal } from '@/types/agreement-event'
 import { formatUnits } from 'viem'
-import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { notFoundLocation } from '@/router/not-found'
+import { parseAgreementId } from '@/utils/agreement-id'
 
 const route = useRoute()
-const agreementId = computed(() => BigInt((route.params.id ?? '') as string))
+const router = useRouter()
+const agreementId = computed(() => parseAgreementId(route.params.id) ?? 0n)
 
 const { contractAddress } = useVestingDeployment()
 
-const { agreement } = useReadVestingAgreement(contractAddress, agreementId)
+const { agreement, isNotFound } = useReadVestingAgreement(contractAddress, agreementId)
+
+watch(
+  isNotFound,
+  (notFound) => {
+    if (notFound) void router.replace(notFoundLocation(route))
+  },
+  { immediate: true },
+)
 const { vestedAmount } = useReadVestedAmount(contractAddress, agreementId)
 
 const tokenAddress = computed(() => agreement.value?.configuration.token)
