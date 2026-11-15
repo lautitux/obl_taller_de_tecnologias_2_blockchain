@@ -33,11 +33,11 @@ const { events: agreementEvents } = useGetAgreementEvents(contractAddress, {
       <v-row>
         <v-col v-for="[id, event] in agreementEvents" :key="id">
           <MyAgreementCard
-            showPayer
-            showClaimedAmount
-            showAvailableAmount
-            showClaimButton
-            showReloadButton
+            show-payer
+            show-claimed-amount
+            show-available-amount
+            show-claim-button
+            show-reload-button
             :event="event"
           />
         </v-col>

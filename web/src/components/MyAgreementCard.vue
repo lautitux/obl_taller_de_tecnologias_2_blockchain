@@ -124,8 +124,8 @@ async function onReload() {
       />
       <AgreementStateChip
         :state="agreement.state"
-        :startDate="agreement.configuration.startDate"
-        :endDate="agreement.configuration.endDate"
+        :start-date="agreement.configuration.startDate"
+        :end-date="agreement.configuration.endDate"
       />
     </template>
     <template #subtitle>#{{ event.agreementId }}</template>

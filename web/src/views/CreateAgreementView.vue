@@ -308,8 +308,8 @@ const revocabilityHint = computed(() =>
             <p v-if="approvalTransaction" class="text-body-2 text-break mt-4">
               Transacción:
               <TransactionLink
-                :chainId="approvalTransaction.chainId"
-                :transactionHash="approvalTransaction.transactionHash"
+                :chain-id="approvalTransaction.chainId"
+                :transaction-hash="approvalTransaction.transactionHash"
               />
             </p>
 
@@ -357,8 +357,8 @@ const revocabilityHint = computed(() =>
             <p v-if="creationTransaction" class="text-body-2 text-break mt-4">
               Transacción:
               <TransactionLink
-                :chainId="creationTransaction.chainId"
-                :transactionHash="creationTransaction.transactionHash"
+                :chain-id="creationTransaction.chainId"
+                :transaction-hash="creationTransaction.transactionHash"
               />
             </p>
           </v-card-text>

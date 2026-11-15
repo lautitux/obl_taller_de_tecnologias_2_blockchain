@@ -35,7 +35,7 @@ const { events: agreementEvents } = useGetAgreementEvents(contractAddress, {
     <section v-else>
       <v-row>
         <v-col v-for="[id, event] in agreementEvents" :key="id">
-          <MyAgreementCard showBeneficiary showCancelButton :event="event" />
+          <MyAgreementCard show-beneficiary show-cancel-button :event="event" />
         </v-col>
       </v-row>
     </section>
