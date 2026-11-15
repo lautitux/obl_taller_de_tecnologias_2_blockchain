@@ -30,6 +30,7 @@ const vuetify = createVuetify({
     locale: 'es',
     messages: { es },
   },
+  theme: { defaultTheme: 'dark' },
 })
 app.use(vuetify)
 
