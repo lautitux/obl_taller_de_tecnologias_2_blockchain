@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterView } from 'vue-router'
-import AppHeader from '@/components/AppHeader.vue'
-import AppNavigation from '@/components/AppNavigation.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import AppNavigation from '@/components/layout/AppNavigation.vue'
 import { provideSnackbarQueue } from '@/composables/useSnackbar'
 
 const drawerOpen = ref(false)

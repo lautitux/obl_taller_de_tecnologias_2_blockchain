@@ -10,7 +10,7 @@ import {
   matchesFilter,
   syncContractEvents,
   type AgreementEventFilter,
-} from '@/services/event-sync/event-sync-service'
+} from '@/services/event-sync'
 import { isPersistableChain, queryPersister } from '@/services/query-persistence'
 
 const EVENTS_QUERY_SCOPE = 'agreement-events'
@@ -29,7 +29,7 @@ interface AgreementEventsOptions {
   enabled?: MaybeRefOrGetter<boolean>
 }
 
-export function useGetAgreementEvents(
+export function useAgreementEvents(
   address: MaybeRefOrGetter<Address | undefined>,
   options: AgreementEventsOptions = {},
 ) {

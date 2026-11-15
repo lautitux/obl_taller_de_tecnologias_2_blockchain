@@ -1,4 +1,4 @@
-import { vestingAbi } from '@/contracts/vestingAbi'
+import { vestingAbi } from '@/abis/vesting-abi'
 import {
   ChainMismatchError,
   ContractFunctionRevertedError,

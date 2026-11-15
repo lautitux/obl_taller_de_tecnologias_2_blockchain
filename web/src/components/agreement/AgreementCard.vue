@@ -184,7 +184,7 @@ async function onReload() {
       <v-btn
         color="primary"
         prepend-icon="mdi-arrow-top-right"
-        :to="'/agreements/' + event.agreementId"
+        :to="{ name: 'agreement', params: { id: event.agreementId.toString() } }"
         >Ver detalles</v-btn
       >
       <v-btn

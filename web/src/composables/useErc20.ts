@@ -2,7 +2,7 @@ import {
   useContractTransaction,
   type TransactionCallbacks,
 } from '@/composables/useContractTransaction'
-import { erc20ErrorsAbi } from '@/contracts/erc20Errors'
+import { erc20ErrorsAbi } from '@/abis/erc20-errors'
 import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
 import { simulateContract, writeContract } from '@wagmi/vue/actions'

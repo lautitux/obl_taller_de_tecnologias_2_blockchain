@@ -1,4 +1,4 @@
-import { vestingAbi } from '@/contracts/vestingAbi'
+import { vestingAbi } from '@/abis/vesting-abi'
 import { agreementEventsBaseQueryKey } from '@/composables/useAgreementEvents'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
 import {

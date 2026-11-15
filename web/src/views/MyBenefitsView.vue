@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import MyAgreementCard from '@/components/MyAgreementCard.vue'
+import AgreementCard from '@/components/agreement/AgreementCard.vue'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
-import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
+import { useAgreementEvents } from '@/composables/useAgreementEvents'
 import { useConnection } from '@wagmi/vue'
 
 const { contractAddress } = useVestingDeployment()
 const { address, isDisconnected } = useConnection()
-const { events: agreementEvents } = useGetAgreementEvents(contractAddress, {
+const { events: agreementEvents } = useAgreementEvents(contractAddress, {
   filter: () => ({ eventName: 'AgreementCreated', beneficiary: address.value }),
   enabled: () => address.value !== undefined,
 })
@@ -32,7 +32,7 @@ const { events: agreementEvents } = useGetAgreementEvents(contractAddress, {
     <section v-else>
       <v-row>
         <v-col v-for="[id, event] in agreementEvents" :key="id">
-          <MyAgreementCard
+          <AgreementCard
             show-payer
             show-claimed-amount
             show-available-amount

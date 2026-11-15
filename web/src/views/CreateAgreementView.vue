@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, shallowRef } from 'vue'
 import { useAgreementPeriod } from '@/composables/useAgreementPeriod'
-import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreementRules'
+import { addressRules, amountRules, dateRangeRules, timeRules } from '@/validation/agreement-rules'
 import { useConnection } from '@wagmi/vue'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/composables/useErc20'
 import { getAddress, isAddress, type Address } from 'viem'
 import { useCreateVestingAgreement } from '@/composables/useVesting'
-import TransactionLink from '@/components/TransactionLink.vue'
+import TransactionLink from '@/components/wallet/TransactionLink.vue'
 const { isConnected, isDisconnected, address: clientAddress } = useConnection()
 
 const formValid = shallowRef<boolean | null>(null)

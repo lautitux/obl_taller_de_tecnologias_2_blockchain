@@ -8,7 +8,7 @@ import { createVuetify } from 'vuetify'
 import { es } from 'vuetify/locale'
 
 import { WagmiPlugin } from '@wagmi/vue'
-import { wagmiConfig } from './wagmi-config'
+import { wagmiConfig } from '@/config/wagmi'
 
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { queryPersister } from './services/query-persistence'

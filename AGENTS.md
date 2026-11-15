@@ -3,13 +3,22 @@
 ## Project layout
 
 ```
-blockchain/contracts/        Solidity source files (*.sol) and unit tests (*.t.sol)
-blockchain/test/             TypeScript integration tests and Solidity unit tests (*.sol)
+blockchain/contracts/        Solidity source files (*.sol)
+blockchain/test/             Solidity tests (*.t.sol)
+blockchain/test/mocks/       Helper contracts used by the tests (not tests themselves)
 blockchain/ignition/         Hardhat Ignition deployment modules
-blockchain/scripts/          Standalone scripts run with `hardhat run`
 blockchain/hardhat.config.ts
 web/                         Vue + Vite frontend
+web/src/abis/                Contract ABIs used by the frontend
+web/src/components/          Components grouped by feature (layout/, wallet/, agreement/)
+web/src/composables/         Composition functions (`useX.ts`)
+web/src/config/              Network deployments and wagmi configuration
+web/src/services/            Logic without Vue reactivity (event sync, query persistence)
+web/src/views/               Route components (`*View.vue`)
 ```
+
+File naming in `web/src`: components and views in PascalCase, composables as `useX.ts`,
+every other TypeScript module in kebab-case.
 
 ## Working in this project
 

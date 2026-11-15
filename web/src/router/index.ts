@@ -16,11 +16,12 @@ const router = createRouter({
     },
     {
       path: '/agreements/:id',
+      name: 'agreement',
       component: AgreementView,
     },
     {
-      path: '/benefit',
-      name: 'my-benefit',
+      path: '/benefits',
+      name: 'my-benefits',
       component: MyBenefitsView,
     },
     {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import AgreementStateChip from '@/components/AgreementStateChip.vue'
+import AgreementStateChip from '@/components/agreement/AgreementStateChip.vue'
 import { useReadErc20 } from '@/composables/useErc20'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
-import { useGetAgreementEvents } from '@/composables/useAgreementEvents'
+import { useAgreementEvents } from '@/composables/useAgreementEvents'
 import { useReadVestedAmount, useReadVestingAgreement } from '@/composables/useVesting'
 import { AgreementState } from '@/types/agreement'
 import type { AgreementWithdrawal } from '@/types/agreement-event'
@@ -21,7 +21,7 @@ const { vestedAmount } = useReadVestedAmount(contractAddress, agreementId)
 const tokenAddress = computed(() => agreement.value?.configuration.token)
 const { name: tokenName, symbol, decimals } = useReadErc20(tokenAddress)
 
-const { events } = useGetAgreementEvents(contractAddress, {
+const { events } = useAgreementEvents(contractAddress, {
   filter: () => ({ agreementId: agreementId.value }),
 })
 

@@ -1,4 +1,4 @@
-﻿import { erc20ErrorsAbi } from '@/contracts/erc20Errors'
+﻿import { erc20ErrorsAbi } from '@/abis/erc20-errors'
 
 export const vestingAbi = [
   {

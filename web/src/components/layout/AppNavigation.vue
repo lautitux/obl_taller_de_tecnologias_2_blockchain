@@ -28,7 +28,7 @@ const navigationItems: NavigationItem[] = [
   {
     title: 'Mis ingresos',
     icon: 'mdi-wallet-outline',
-    to: { name: 'my-benefit' },
+    to: { name: 'my-benefits' },
     disabled: false,
   },
 ]
