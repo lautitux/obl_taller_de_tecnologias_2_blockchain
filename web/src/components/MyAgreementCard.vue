@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useReadErc20 } from '@/composables/useErc20'
 import { useNow } from '@/composables/useNow'
+import { useSnackbar } from '@/composables/useSnackbar'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useCancelVestingAgreement,
@@ -38,7 +39,7 @@ const {
 
 const emit = defineEmits<{
   cancel: [agreementId: bigint]
-  claim: [agreementId: bigint, availableAmount: bigint]
+  claim: [agreementId: bigint, claimedAmount: bigint]
 }>()
 
 const { contractAddress } = useVestingDeployment()
@@ -55,13 +56,21 @@ const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(contractAdd
 const tokenAddress = computed(() => agreement.value?.configuration.token)
 const { symbol, decimals } = useReadErc20(tokenAddress)
 
-const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(contractAddress)
+const { notifyError, notifySuccess } = useSnackbar()
+
+const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(contractAddress, {
+  onSuccess: () => notifySuccess('Acuerdo cancelado.'),
+  onError: notifyError,
+})
 
 const availableAmount = computed(
   () => (vestedAmount?.value ?? 0n) - (agreement.value?.alreadyWithdrawnAmount ?? 0n),
 )
 
-const { claim, isClaiming } = useClaimVestedAmount(contractAddress)
+const { claim, isClaiming } = useClaimVestedAmount(contractAddress, {
+  onSuccess: () => notifySuccess('Tokens reclamados.'),
+  onError: notifyError,
+})
 
 const { address } = useConnection()
 const now = useNow()
@@ -90,14 +99,14 @@ const canClaim = computed(() =>
 )
 
 async function onCancel() {
-  await cancel(event.agreementId)
-  emit('cancel', event.agreementId)
+  if (await cancel(event.agreementId)) emit('cancel', event.agreementId)
 }
 
 async function onClaim() {
-  await claim(event.agreementId, availableAmount.value)
+  const amount = availableAmount.value
+  if (!(await claim(event.agreementId, amount))) return
   await refetchVested()
-  emit('claim', event.agreementId, availableAmount.value)
+  emit('claim', event.agreementId, amount)
 }
 
 const RELOAD_COOLDOWN_MS = 5_000

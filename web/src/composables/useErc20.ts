@@ -1,10 +1,13 @@
-import type { TransactionReceipt } from '@/types/transaction'
-import { errorAsMessage, interpretError } from '@/utils/errors'
+import {
+  useContractTransaction,
+  type TransactionCallbacks,
+} from '@/composables/useContractTransaction'
+import { erc20ErrorsAbi } from '@/contracts/erc20Errors'
 import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
-import { simulateContract, waitForTransactionReceipt, writeContract } from '@wagmi/vue/actions'
+import { simulateContract, writeContract } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
-import { erc20Abi, maxUint256, parseUnits, type Address, type WriteContractErrorType } from 'viem'
+import { erc20Abi, maxUint256, parseUnits, type Address } from 'viem'
 import {
   ref,
   toValue,
@@ -124,30 +127,22 @@ export function useReadAllowanceErc20(
   return { allowance, error, isLoading, refresh: refetch }
 }
 
-export function useApproveErc20(address: MaybeRefOrGetter<Address | undefined>) {
-  const error = ref<Error | WriteContractErrorType | null>(null)
-  const errorMessage = ref<string | null>(null)
-  const receipt = ref<TransactionReceipt | null>(null)
-  const isApproved = ref<boolean>(false)
-  const isApproving = ref<boolean>(false)
+const erc20WithErrorsAbi = [...erc20Abi, ...erc20ErrorsAbi] as const
 
+type ApproveArgs = [spender: Address | undefined, value: bigint | null | undefined]
+
+export function useApproveErc20(
+  address: MaybeRefOrGetter<Address | undefined>,
+  callbacks: TransactionCallbacks<ApproveArgs> = {},
+) {
   const config = useConfig()
   const chainId = useChainId()
   const queryClient = useQueryClient()
 
-  const approve = async (spender: Address | undefined, value: bigint | null | undefined) => {
-    if (isApproving.value) return
-
-    error.value = null
-    errorMessage.value = null
-    receipt.value = null
-    isApproved.value = false
-    isApproving.value = true
-
-    try {
+  const { execute, isPending, isSuccess, receipt, error, errorMessage } = useContractTransaction(
+    async (...[spender, value]: ApproveArgs) => {
       const token = toValue(address)
       const networkId = chainId.value
-
       if (token === undefined || spender === undefined) {
         throw new Error('Ingresá un token y una dirección de contrato válidos.')
       }
@@ -156,38 +151,32 @@ export function useApproveErc20(address: MaybeRefOrGetter<Address | undefined>) 
       }
 
       const { request, result } = await simulateContract(config, {
-        abi: erc20Abi,
+        abi: erc20WithErrorsAbi,
         chainId: networkId,
         address: token,
         functionName: 'approve',
         args: [spender, value],
       })
-
-      if (result === false) {
-        throw new Error('La aprobación falló sin revertir.')
-      }
+      if (result === false) throw new Error('La aprobación falló sin revertir.')
 
       const hash = await writeContract(config, { ...request, chainId: networkId })
+      return { hash, chainId: networkId, address: token }
+    },
+    {
+      ...callbacks,
+      onConfirmed: (transaction) =>
+        invalidateErc20Allowances(queryClient, transaction.address, transaction.chainId),
+    },
+  )
 
-      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
-
-      if (receipt.value.status === 'reverted') {
-        throw new Error('La transacción revirtio')
-      }
-
-      isApproved.value = true
-      await invalidateErc20Allowances(queryClient, token, networkId)
-    } catch (err) {
-      error.value = err as Error
-      const interpretedError = interpretError(err)
-      errorMessage.value = errorAsMessage(interpretedError)
-      isApproved.value = false
-    } finally {
-      isApproving.value = false
-    }
+  return {
+    approve: execute,
+    isApproved: isSuccess,
+    isApproving: isPending,
+    receipt,
+    error,
+    errorMessage,
   }
-
-  return { approve, isApproving, isApproved, receipt, error, errorMessage }
 }
 
 export function useParseAmountErc20(
