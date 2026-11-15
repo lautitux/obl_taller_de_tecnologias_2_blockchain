@@ -1,19 +1,17 @@
-import { vestingAbi } from '@/contracts/vestingAbi'
+import { vestingAbi } from '@/abis/vesting-abi'
 import { agreementEventsBaseQueryKey } from '@/composables/useAgreementEvents'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
-import type { TransactionReceipt } from '@/types/transaction'
-import { errorAsMessage, interpretError } from '@/utils/errors'
-import { useQueryClient } from '@tanstack/vue-query'
-import { useChainId, useConfig, useReadContract, useWriteContract } from '@wagmi/vue'
 import {
-  simulateContract,
-  waitForTransactionReceipt,
-  writeContract,
-  type WriteContractErrorType,
-} from '@wagmi/vue/actions'
+  useContractTransaction,
+  type TransactionCallbacks,
+} from '@/composables/useContractTransaction'
+import { invalidateErc20Allowances } from '@/composables/useErc20'
+import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
+import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
+import { simulateContract, writeContract } from '@wagmi/vue/actions'
 import { readContractQueryKey } from '@wagmi/vue/query'
 import { maxUint256, type Address } from 'viem'
-import { computed, ref, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
+import { computed, toValue, unref, type MaybeRef, type MaybeRefOrGetter, type Ref } from 'vue'
 
 type VestingReadAgreementsRespones = readonly [
   payer: Address,
@@ -30,33 +28,44 @@ type VestingReadAgreementsRespones = readonly [
   bigint,
 ]
 
-interface VestingAgreementReadInfo {
-  address: Address
-  agreementId: bigint
-  enabled?: boolean | undefined
+interface VestingReadOptions {
+  enabled?: MaybeRefOrGetter<boolean>
 }
 
-export function readVestingAgreementQueryKey(
+const MISSING_CONTRACT_MESSAGE = 'El contrato no está desplegado en la red actual.'
+
+type VestingReadFunction = 'agreements' | 'vestedAmountOf'
+
+function invalidateAgreementReads(
+  queryClient: QueryClient,
   address: Address,
   agreementId: bigint,
-  chainId?: number | undefined,
+  chainId: number,
+  functionNames: readonly VestingReadFunction[],
 ) {
-  return readContractQueryKey({
-    address,
-    abi: vestingAbi,
-    functionName: 'agreements',
-    args: [agreementId],
-    chainId,
-  })
+  return Promise.all(
+    functionNames.map((functionName) =>
+      queryClient.invalidateQueries({
+        queryKey: readContractQueryKey({
+          abi: vestingAbi,
+          address,
+          functionName,
+          args: [agreementId],
+          chainId,
+        }),
+      }),
+    ),
+  )
 }
 
 export function useReadVestingAgreement(
-  vestingAgreementReadInfo: MaybeRefOrGetter<VestingAgreementReadInfo>,
+  address: MaybeRef<Address | undefined>,
+  agreementId: MaybeRefOrGetter<bigint>,
+  options: VestingReadOptions = {},
 ) {
-  const info = computed(() => toValue(vestingAgreementReadInfo))
-  const address = computed(() => info.value.address)
-  const args = computed(() => [info.value.agreementId] as const)
-  const enabled = computed(() => info.value.enabled ?? true)
+  const { enabled: isEnabled = true } = options
+  const args = computed(() => [toValue(agreementId)] as const)
+  const enabled = computed(() => toValue(isEnabled) && unref(address) !== undefined)
 
   const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
@@ -90,12 +99,13 @@ function vestingReadAgreementsResponseToAgreement(
 }
 
 export function useReadVestedAmount(
-  vestingAgreementReadInfo: MaybeRefOrGetter<VestingAgreementReadInfo>,
+  address: MaybeRef<Address | undefined>,
+  agreementId: MaybeRefOrGetter<bigint>,
+  options: VestingReadOptions = {},
 ) {
-  const info = computed(() => toValue(vestingAgreementReadInfo))
-  const address = computed(() => info.value.address)
-  const args = computed(() => [info.value.agreementId] as const)
-  const enabled = computed(() => info.value.enabled ?? true)
+  const { enabled: isEnabled = true } = options
+  const args = computed(() => [toValue(agreementId)] as const)
+  const enabled = computed(() => toValue(isEnabled) && unref(address) !== undefined)
 
   const { data, isSuccess, isLoading, isError, error, refetch } = useReadContract({
     abi: vestingAbi,
@@ -108,204 +118,151 @@ export function useReadVestedAmount(
   return { vestedAmount: data, isSuccess, isLoading, isError, error, refetch }
 }
 
-interface VestingAgreementCreateInfo {
-  address: Address
-  configuration: AgreementConfiguration
+function requireContract(address: MaybeRefOrGetter<Address | undefined>): Address {
+  const contract = toValue(address)
+  if (contract === undefined) throw new Error(MISSING_CONTRACT_MESSAGE)
+  return contract
 }
 
 export function useCreateVestingAgreement(
-  vestingAgreementCreateInfo: MaybeRefOrGetter<VestingAgreementCreateInfo>,
+  address: MaybeRefOrGetter<Address | undefined>,
+  callbacks: TransactionCallbacks<[AgreementConfiguration]> = {},
 ) {
-  const isCreated = ref<boolean>(false)
-  const isCreating = ref<boolean>(false)
-  const receipt = ref<TransactionReceipt | null>(null)
-  const error = ref<Error | WriteContractErrorType | null>(null)
-  const errorMessage = ref<string | null>(null)
-
-  const { mutateAsync } = useWriteContract()
   const config = useConfig()
   const chainId = useChainId()
   const queryClient = useQueryClient()
 
-  const create = async () => {
-    if (isCreating.value) return
-    isCreated.value = false
-    receipt.value = null
-    error.value = null
-    errorMessage.value = null
-    isCreating.value = true
-
-    try {
-      const { address, configuration } = toValue(vestingAgreementCreateInfo)
+  const { execute, isPending, isSuccess, receipt, error, errorMessage } = useContractTransaction(
+    async (configuration: AgreementConfiguration) => {
+      const contract = requireContract(address)
       const networkId = chainId.value
       const { totalAmount } = configuration
-
       if (totalAmount == null || totalAmount <= 0n || totalAmount > maxUint256) {
         throw new Error('Ingresá un monto válido antes de crear el acuerdo.')
       }
 
       const { request } = await simulateContract(config, {
         abi: vestingAbi,
-        address,
+        address: contract,
         chainId: networkId,
         functionName: 'createAgreement',
         args: [configuration],
       })
+      const hash = await writeContract(config, { ...request, chainId: networkId })
+      return { hash, chainId: networkId, address: contract }
+    },
+    {
+      ...callbacks,
+      onConfirmed: (transaction, configuration) => {
+        void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
+        void invalidateErc20Allowances(queryClient, configuration.token, transaction.chainId)
+      },
+    },
+  )
 
-      const hash = await mutateAsync({
-        ...request,
-        chainId: networkId,
-      })
-
-      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
-      if (receipt.value.status === 'reverted') {
-        throw new Error('La transacción revirtio')
-      }
-
-      isCreated.value = true
-      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
-    } catch (err) {
-      error.value = err as Error
-      const interpretedError = interpretError(err)
-      errorMessage.value = errorAsMessage(interpretedError)
-      isCreated.value = false
-    } finally {
-      isCreating.value = false
-    }
+  return {
+    create: execute,
+    isCreated: isSuccess,
+    isCreating: isPending,
+    receipt,
+    error,
+    errorMessage,
   }
-
-  return { create, isCreated, isCreating, receipt, error, errorMessage }
-}
-
-interface VestingAgreementCancelInfo {
-  address: Address
-  agreementId: bigint
 }
 
 export function useCancelVestingAgreement(
-  vestingAgreementCancelInfo: MaybeRefOrGetter<VestingAgreementCancelInfo>,
+  address: MaybeRefOrGetter<Address | undefined>,
+  callbacks: TransactionCallbacks<[agreementId: bigint]> = {},
 ) {
-  const error = ref<Error | WriteContractErrorType | null>(null)
-  const errorMessage = ref<string | null>(null)
-  const receipt = ref<TransactionReceipt | null>(null)
-  const isCancelled = ref<boolean>(false)
-  const isCancelling = ref<boolean>(false)
-
   const config = useConfig()
   const chainId = useChainId()
   const queryClient = useQueryClient()
 
-  const cancel = async () => {
-    if (isCancelling.value) return
+  const { execute, isPending, isSuccess, receipt, error, errorMessage } = useContractTransaction(
+    async (agreementId: bigint) => {
+      const contract = requireContract(address)
+      const networkId = chainId.value
 
-    error.value = null
-    errorMessage.value = null
-    receipt.value = null
-    isCancelled.value = false
-    isCancelling.value = true
-
-    const { address, agreementId } = toValue(vestingAgreementCancelInfo)
-    const networkId = chainId.value
-
-    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
-
-    try {
       const { request } = await simulateContract(config, {
         abi: vestingAbi,
         chainId: networkId,
-        address,
+        address: contract,
         functionName: 'cancelAgreement',
         args: [agreementId],
       })
-
       const hash = await writeContract(config, { ...request, chainId: networkId })
+      return { hash, chainId: networkId, address: contract }
+    },
+    {
+      ...callbacks,
+      onConfirmed: (transaction, agreementId) => {
+        void invalidateAgreementReads(
+          queryClient,
+          transaction.address,
+          agreementId,
+          transaction.chainId,
+          ['agreements', 'vestedAmountOf'],
+        )
+        void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
+      },
+    },
+  )
 
-      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
-      if (receipt.value.status === 'reverted') {
-        throw new Error('La transacción revirtio')
-      }
-
-      isCancelled.value = true
-      void queryClient.invalidateQueries({ queryKey: readAgreementKey })
-      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
-    } catch (err) {
-      error.value = err as Error
-      const interpretedError = interpretError(err)
-      errorMessage.value = errorAsMessage(interpretedError)
-      isCancelled.value = false
-    } finally {
-      isCancelling.value = false
-    }
+  return {
+    cancel: execute,
+    isCancelled: isSuccess,
+    isCancelling: isPending,
+    receipt,
+    error,
+    errorMessage,
   }
-
-  return { cancel, isCancelling, isCancelled, receipt, error, errorMessage }
-}
-
-interface VestingAgreementClaimInfo {
-  address: Address
-  agreementId: bigint
-  amount: bigint
 }
 
 export function useClaimVestedAmount(
-  vestingAgreementUpdateInfo: MaybeRefOrGetter<VestingAgreementClaimInfo>,
+  address: MaybeRefOrGetter<Address | undefined>,
+  callbacks: TransactionCallbacks<[agreementId: bigint, amount: bigint]> = {},
 ) {
-  const error = ref<Error | WriteContractErrorType | null>(null)
-  const errorMessage = ref<string | null>(null)
-  const receipt = ref<TransactionReceipt | null>(null)
-  const isClaimed = ref<boolean>(false)
-  const isClaiming = ref<boolean>(false)
-
   const config = useConfig()
   const chainId = useChainId()
   const queryClient = useQueryClient()
 
-  const claim = async (): Promise<void> => {
-    if (isClaiming.value) return
-
-    error.value = null
-    errorMessage.value = null
-    receipt.value = null
-    isClaimed.value = false
-    isClaiming.value = true
-
-    const { address, agreementId, amount } = toValue(vestingAgreementUpdateInfo)
-    const networkId = chainId.value
-
-    const readAgreementKey = readVestingAgreementQueryKey(address, agreementId, networkId)
-
-    try {
-      if (amount <= 0) {
-        throw new Error('La cantidad a reclamar debe ser superior a 0')
-      }
+  const { execute, isPending, isSuccess, receipt, error, errorMessage } = useContractTransaction(
+    async (agreementId: bigint, amount: bigint) => {
+      const contract = requireContract(address)
+      if (amount <= 0n) throw new Error('La cantidad a reclamar debe ser superior a 0.')
+      const networkId = chainId.value
 
       const { request } = await simulateContract(config, {
         abi: vestingAbi,
         chainId: networkId,
-        address,
+        address: contract,
         functionName: 'claimAmountFrom',
         args: [agreementId, amount],
       })
-
       const hash = await writeContract(config, { ...request, chainId: networkId })
+      return { hash, chainId: networkId, address: contract }
+    },
+    {
+      ...callbacks,
+      onConfirmed: async (transaction, agreementId) => {
+        void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
+        await invalidateAgreementReads(
+          queryClient,
+          transaction.address,
+          agreementId,
+          transaction.chainId,
+          ['agreements'],
+        )
+      },
+    },
+  )
 
-      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
-      if (receipt.value.status === 'reverted') {
-        throw new Error('La transacción revirtio')
-      }
-
-      isClaimed.value = true
-      void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
-      await queryClient.invalidateQueries({ queryKey: readAgreementKey })
-    } catch (err) {
-      error.value = err as Error
-      const interpretedError = interpretError(err)
-      errorMessage.value = errorAsMessage(interpretedError)
-      isClaimed.value = false
-    } finally {
-      isClaiming.value = false
-    }
+  return {
+    claim: execute,
+    isClaimed: isSuccess,
+    isClaiming: isPending,
+    receipt,
+    error,
+    errorMessage,
   }
-
-  return { claim, isClaiming, isClaimed, receipt, error, errorMessage }
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useReadErc20 } from '@/composables/useErc20'
-import { useSettings } from '@/composables/useSettings'
+import { useNow } from '@/composables/useNow'
+import { useSnackbar } from '@/composables/useSnackbar'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useCancelVestingAgreement,
   useClaimVestedAmount,
@@ -10,7 +12,7 @@ import {
 import { AgreementState } from '@/types/agreement'
 import type { AgreementEvent } from '@/types/agreement-event'
 import { useConnection } from '@wagmi/vue'
-import { formatUnits, isAddressEqual, type Address } from 'viem'
+import { formatUnits, isAddressEqual } from 'viem'
 import { computed, shallowRef } from 'vue'
 import AgreementStateChip from './AgreementStateChip.vue'
 
@@ -37,48 +39,43 @@ const {
 
 const emit = defineEmits<{
   cancel: [agreementId: bigint]
-  claim: [agreementId: bigint, availableAmount: bigint]
+  claim: [agreementId: bigint, claimedAmount: bigint]
 }>()
 
-const { settings } = useSettings()
+const { contractAddress } = useVestingDeployment()
+const agreementId = () => event.agreementId
 
 const {
   agreement,
   isLoading,
   refetch: refetchAgreement,
-} = useReadVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+} = useReadVestingAgreement(contractAddress, agreementId)
 
-const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+const { vestedAmount, refetch: refetchVested } = useReadVestedAmount(contractAddress, agreementId)
 
-const { symbol, decimals } = useReadErc20(() => ({
-  address: agreement.value?.configuration.token as Address,
-  enabled: agreement.value != undefined,
-}))
+const tokenAddress = computed(() => agreement.value?.configuration.token)
+const { symbol, decimals } = useReadErc20(tokenAddress)
 
-const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-}))
+const { notifyError, notifySuccess } = useSnackbar()
+
+const { cancel, isCancelling, isCancelled } = useCancelVestingAgreement(contractAddress, {
+  onSuccess: () => notifySuccess('Acuerdo cancelado.'),
+  onError: notifyError,
+})
 
 const availableAmount = computed(
   () => (vestedAmount?.value ?? 0n) - (agreement.value?.alreadyWithdrawnAmount ?? 0n),
 )
 
-const { claim, isClaiming } = useClaimVestedAmount(() => ({
-  address: settings.contractAddress as Address,
-  agreementId: event.agreementId,
-  amount: availableAmount.value,
-}))
+const { claim, isClaiming } = useClaimVestedAmount(contractAddress, {
+  onSuccess: () => notifySuccess('Tokens reclamados.'),
+  onError: notifyError,
+})
 
 const { address } = useConnection()
+const now = useNow()
 
-const canCanel = computed(() =>
+const canCancel = computed(() =>
   Boolean(
     showCancelButton &&
     address.value !== undefined &&
@@ -86,7 +83,7 @@ const canCanel = computed(() =>
     agreement.value.configuration.revocable &&
     !isCancelled.value &&
     agreement.value.state === AgreementState.Active &&
-    Date.now() / 1000 < agreement.value.configuration.endDate &&
+    Math.floor(now.value / 1000) < agreement.value.configuration.endDate &&
     isAddressEqual(agreement.value.payer, address.value),
   ),
 )
@@ -102,19 +99,24 @@ const canClaim = computed(() =>
 )
 
 async function onCancel() {
-  await cancel()
-  emit('cancel', event.agreementId)
+  if (await cancel(event.agreementId)) emit('cancel', event.agreementId)
 }
 
 async function onClaim() {
-  await claim()
+  const amount = availableAmount.value
+  if (!(await claim(event.agreementId, amount))) return
   await refetchVested()
-  emit('claim', event.agreementId, availableAmount.value)
+  emit('claim', event.agreementId, amount)
 }
 
+const RELOAD_COOLDOWN_MS = 5_000
 const isReloading = shallowRef(false)
+const lastReloadAt = shallowRef(0)
+const canReload = computed(() => now.value - lastReloadAt.value >= RELOAD_COOLDOWN_MS)
 
 async function onReload() {
+  if (!canReload.value) return
+  lastReloadAt.value = Date.now()
   isReloading.value = true
   try {
     await Promise.all([refetchAgreement(), refetchVested()])
@@ -133,13 +135,15 @@ async function onReload() {
         v-if="showReloadButton"
         icon="mdi-reload"
         variant="text"
+        aria-label="Recargar acuerdo"
         :loading="isReloading"
+        :disabled="!canReload"
         @click="onReload"
       />
       <AgreementStateChip
         :state="agreement.state"
-        :startDate="agreement.configuration.startDate"
-        :endDate="agreement.configuration.endDate"
+        :start-date="agreement.configuration.startDate"
+        :end-date="agreement.configuration.endDate"
       />
     </template>
     <template #subtitle>#{{ event.agreementId }}</template>
@@ -180,11 +184,11 @@ async function onReload() {
       <v-btn
         color="primary"
         prepend-icon="mdi-arrow-top-right"
-        :to="'/agreements/' + event.agreementId"
+        :to="{ name: 'agreement', params: { id: event.agreementId.toString() } }"
         >Ver detalles</v-btn
       >
       <v-btn
-        v-if="canCanel"
+        v-if="canCancel"
         :disabled="isCancelling"
         :loading="isCancelling"
         color="error"

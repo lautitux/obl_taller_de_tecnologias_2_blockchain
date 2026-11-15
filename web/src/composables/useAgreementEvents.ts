@@ -4,53 +4,61 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { Address } from 'viem'
 import type { ExtendedAgreementEvent } from '@/types/agreement-event'
 import type { AgreementEventsQueryData } from '@/types/cached-event'
-import { getVestingDeploymentBlock } from '@/config/contract-deployments'
+import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   cachedEventToExtendedEvent,
   matchesFilter,
   syncContractEvents,
   type AgreementEventFilter,
-} from '@/services/event-sync/event-sync-service'
+} from '@/services/event-sync'
 import { isPersistableChain, queryPersister } from '@/services/query-persistence'
-
-interface AgreementEventSearchInput extends AgreementEventFilter {
-  address: Address
-}
 
 const EVENTS_QUERY_SCOPE = 'agreement-events'
 const REFRESH_INTERVAL = 12_000
 
-export function agreementEventsQueryKey(chainId: number, address: Address) {
-  return [EVENTS_QUERY_SCOPE, chainId, address.toLowerCase()] as const
+export function agreementEventsQueryKey(chainId: number, address: Address | undefined) {
+  return [EVENTS_QUERY_SCOPE, chainId, address?.toLowerCase() ?? null] as const
 }
 
 export function agreementEventsBaseQueryKey() {
   return [EVENTS_QUERY_SCOPE] as const
 }
 
-export function useGetAgreementEvents(
-  agreementSearch: MaybeRefOrGetter<AgreementEventSearchInput>,
+interface AgreementEventsOptions {
+  filter?: MaybeRefOrGetter<AgreementEventFilter>
+  enabled?: MaybeRefOrGetter<boolean>
+}
+
+export function useAgreementEvents(
+  address: MaybeRefOrGetter<Address | undefined>,
+  options: AgreementEventsOptions = {},
 ) {
-  const search = computed(() => toValue(agreementSearch))
+  const { filter = {}, enabled: isEnabled = true } = options
+  const contract = computed(() => toValue(address))
   const chainId = useChainId()
   const config = useConfig()
   const queryClient = useQueryClient()
 
-  const deploymentBlock = computed(() => getVestingDeploymentBlock(chainId.value))
-  const queryKey = computed(() => agreementEventsQueryKey(chainId.value, search.value.address))
+  const { deploymentBlock } = useVestingDeployment()
+  const queryKey = computed(() => agreementEventsQueryKey(chainId.value, contract.value))
+  const enabled = computed(
+    () => toValue(isEnabled) && deploymentBlock.value !== undefined && contract.value !== undefined,
+  )
 
   const persist = computed(() => isPersistableChain(chainId.value))
 
   const query = useQuery<AgreementEventsQueryData>(() => ({
     queryKey: queryKey.value,
-    enabled: deploymentBlock.value !== undefined && search.value.address !== undefined,
+    enabled: enabled.value,
     queryFn: () => {
       const key = queryKey.value
       const shouldPersist = persist.value
+      const contractAddress = contract.value
+      if (contractAddress === undefined) throw new Error('Falta la dirección del contrato.')
       return syncContractEvents(
         config,
         {
-          address: search.value.address,
+          address: contractAddress,
           chainId: chainId.value,
           deploymentBlock: deploymentBlock.value ?? 0n,
         },
@@ -70,10 +78,12 @@ export function useGetAgreementEvents(
   }))
 
   const events = computed(() => {
-    const filter = search.value
     const mapped = new Map<string, ExtendedAgreementEvent>()
+    // The cache is shared per contract: while disabled, hide data synced by other consumers.
+    if (!enabled.value) return mapped
+    const eventFilter = toValue(filter)
     for (const event of query.data.value?.events ?? []) {
-      if (matchesFilter(event, filter)) mapped.set(event.id, cachedEventToExtendedEvent(event))
+      if (matchesFilter(event, eventFilter)) mapped.set(event.id, cachedEventToExtendedEvent(event))
     }
     return mapped
   })

@@ -20,7 +20,7 @@ const { isConnected, connector } = useConnection()
 
 <template>
   <v-menu v-if="!isConnected">
-    <template v-slot:activator="{ props }">
+    <template #activator="{ props }">
       <v-btn
         color="primary"
         v-bind="props"
@@ -32,23 +32,23 @@ const { isConnected, connector } = useConnection()
     </template>
     <v-list>
       <v-list-item
-        v-for="connector in connectors"
-        :key="connector.uid"
+        v-for="availableConnector in connectors"
+        :key="availableConnector.uid"
         :disabled="isPending"
-        @click="connect({ connector })"
+        @click="connect({ connector: availableConnector })"
       >
         <template #prepend>
           <v-avatar size="24" rounded="0">
             <v-img
-              v-if="connector.icon"
-              :src="connector.icon"
-              :alt="`Icono de ${connector.name}`"
+              v-if="availableConnector.icon"
+              :src="availableConnector.icon"
+              :alt="`Icono de ${availableConnector.name}`"
               :cover="false"
             />
             <v-icon v-else>mdi-wallet-outline</v-icon>
           </v-avatar>
         </template>
-        <v-list-item-title>{{ connector.name }}</v-list-item-title>
+        <v-list-item-title>{{ availableConnector.name }}</v-list-item-title>
       </v-list-item>
     </v-list>
   </v-menu>

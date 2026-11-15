@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useDisplay } from 'vuetify'
-import WalletConnectButton from '@/components/WalletConnectButton.vue'
-import AccountChip from './AccountChip.vue'
-import NetworkChip from './NetworkChip.vue'
+import WalletConnectButton from '@/components/wallet/WalletConnectButton.vue'
+import AccountChip from '@/components/wallet/AccountChip.vue'
+import NetworkChip from '@/components/wallet/NetworkChip.vue'
 
 defineProps<{ navigationOpen: boolean }>()
 const emit = defineEmits<{ toggleNavigation: [] }>()

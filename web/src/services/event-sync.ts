@@ -1,6 +1,6 @@
 import { getBlock, getBlockNumber, getContractEvents } from '@wagmi/vue/actions'
 import type { Address, Hash } from 'viem'
-import { vestingAbi } from '@/contracts/vestingAbi'
+import { vestingAbi } from '@/abis/vesting-abi'
 import type {
   AgreementEvent,
   AgreementEventName,

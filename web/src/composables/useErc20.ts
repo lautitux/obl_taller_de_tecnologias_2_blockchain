@@ -1,19 +1,48 @@
-import type { TransactionReceipt } from '@/types/transaction'
-import { errorAsMessage, interpretError } from '@/utils/errors'
+import {
+  useContractTransaction,
+  type TransactionCallbacks,
+} from '@/composables/useContractTransaction'
+import { erc20ErrorsAbi } from '@/abis/erc20-errors'
+import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
-import { simulateContract, waitForTransactionReceipt, writeContract } from '@wagmi/vue/actions'
-import { erc20Abi, maxUint256, parseUnits, type Address, type WriteContractErrorType } from 'viem'
-import { ref, toValue, computed, type MaybeRefOrGetter, watchEffect } from 'vue'
+import { simulateContract, writeContract } from '@wagmi/vue/actions'
+import { readContractQueryKey } from '@wagmi/vue/query'
+import { erc20Abi, maxUint256, parseUnits, type Address } from 'viem'
+import {
+  ref,
+  toValue,
+  unref,
+  computed,
+  watchEffect,
+  type MaybeRef,
+  type MaybeRefOrGetter,
+} from 'vue'
 
-interface Erc20ReadInfo {
-  address: Address
-  enabled?: boolean | undefined
+interface Erc20ReadOptions {
+  enabled?: MaybeRefOrGetter<boolean>
 }
 
-export function useReadErc20(erc20ReadInfo: MaybeRefOrGetter<Erc20ReadInfo>) {
-  const info = computed(() => toValue(erc20ReadInfo))
-  const address = computed(() => info.value.address)
-  const enabled = computed(() => info.value.enabled ?? true)
+export function invalidateErc20Allowances(
+  queryClient: QueryClient,
+  token: Address,
+  chainId: number,
+) {
+  return queryClient.invalidateQueries({
+    queryKey: readContractQueryKey({
+      abi: erc20Abi,
+      address: token,
+      functionName: 'allowance',
+      chainId,
+    }),
+  })
+}
+
+export function useReadErc20(
+  address: MaybeRef<Address | undefined>,
+  options: Erc20ReadOptions = {},
+) {
+  const { enabled: isEnabled = true } = options
+  const enabled = computed(() => toValue(isEnabled) && unref(address) !== undefined)
 
   const {
     data: name,
@@ -66,21 +95,21 @@ export function useReadErc20(erc20ReadInfo: MaybeRefOrGetter<Erc20ReadInfo>) {
   }
 }
 
-interface Erc20AllowanceInfo {
-  address: Address
-  owner: Address
-  spender: Address
-  enabled?: boolean | undefined
-}
-
-export function useReadAllowanceErc20(erc20AllowanceInfo: MaybeRefOrGetter<Erc20AllowanceInfo>) {
-  const info = computed(() => toValue(erc20AllowanceInfo))
-  const address = computed(() => info.value.address)
+export function useReadAllowanceErc20(
+  address: MaybeRef<Address | undefined>,
+  owner: MaybeRefOrGetter<Address | undefined>,
+  spender: MaybeRefOrGetter<Address | undefined>,
+  options: Erc20ReadOptions = {},
+) {
+  const { enabled: isEnabled = true } = options
   const args = computed(() => {
-    const { owner, spender } = info.value
-    return [owner, spender] as const
+    const ownerAddress = toValue(owner)
+    const spenderAddress = toValue(spender)
+    return ownerAddress && spenderAddress ? ([ownerAddress, spenderAddress] as const) : undefined
   })
-  const isQueryEnabled = computed(() => info.value.enabled ?? true)
+  const enabled = computed(
+    () => toValue(isEnabled) && unref(address) !== undefined && args.value !== undefined,
+  )
 
   const {
     data: allowance,
@@ -92,91 +121,74 @@ export function useReadAllowanceErc20(erc20AllowanceInfo: MaybeRefOrGetter<Erc20
     address,
     functionName: 'allowance',
     args,
-    query: { enabled: isQueryEnabled },
+    query: { enabled },
   })
 
   return { allowance, error, isLoading, refresh: refetch }
 }
 
-interface Erc20ApprovalInfo {
-  address: Address
-  spender: Address
-  value: bigint | null
-}
+const erc20WithErrorsAbi = [...erc20Abi, ...erc20ErrorsAbi] as const
 
-export function useApproveErc20(erc20ApprovalInfo: MaybeRefOrGetter<Erc20ApprovalInfo>) {
-  const error = ref<Error | WriteContractErrorType | null>(null)
-  const errorMessage = ref<string | null>(null)
-  const receipt = ref<TransactionReceipt | null>(null)
-  const isApproved = ref<boolean>(false)
-  const isApproving = ref<boolean>(false)
+type ApproveArgs = [spender: Address | undefined, value: bigint | null | undefined]
 
+export function useApproveErc20(
+  address: MaybeRefOrGetter<Address | undefined>,
+  callbacks: TransactionCallbacks<ApproveArgs> = {},
+) {
   const config = useConfig()
   const chainId = useChainId()
+  const queryClient = useQueryClient()
 
-  const approve = async () => {
-    if (isApproving.value) return
-
-    error.value = null
-    errorMessage.value = null
-    receipt.value = null
-    isApproved.value = false
-    isApproving.value = true
-
-    try {
-      const { address, spender, value } = toValue(erc20ApprovalInfo)
+  const { execute, isPending, isSuccess, receipt, error, errorMessage } = useContractTransaction(
+    async (...[spender, value]: ApproveArgs) => {
+      const token = toValue(address)
       const networkId = chainId.value
-
+      if (token === undefined || spender === undefined) {
+        throw new Error('Ingresá un token y una dirección de contrato válidos.')
+      }
       if (value == null || value <= 0n || value > maxUint256) {
         throw new Error('Ingresá un monto válido antes de aprobar.')
       }
 
       const { request, result } = await simulateContract(config, {
-        abi: erc20Abi,
+        abi: erc20WithErrorsAbi,
         chainId: networkId,
-        address,
+        address: token,
         functionName: 'approve',
         args: [spender, value],
       })
-
-      if (result === false) {
-        throw new Error('La aprobación falló sin revertir.')
-      }
+      if (result === false) throw new Error('La aprobación falló sin revertir.')
 
       const hash = await writeContract(config, { ...request, chainId: networkId })
+      return { hash, chainId: networkId, address: token }
+    },
+    {
+      ...callbacks,
+      onConfirmed: (transaction) =>
+        invalidateErc20Allowances(queryClient, transaction.address, transaction.chainId),
+    },
+  )
 
-      receipt.value = await waitForTransactionReceipt(config, { hash, chainId: networkId })
-
-      if (receipt.value.status === 'reverted') {
-        throw new Error('La transacción revirtio')
-      }
-
-      isApproved.value = true
-    } catch (err) {
-      error.value = err as Error
-      const interpretedError = interpretError(err)
-      errorMessage.value = errorAsMessage(interpretedError)
-      isApproved.value = false
-    } finally {
-      isApproving.value = false
-    }
+  return {
+    approve: execute,
+    isApproved: isSuccess,
+    isApproving: isPending,
+    receipt,
+    error,
+    errorMessage,
   }
-
-  return { approve, isApproving, isApproved, receipt, error, errorMessage }
 }
 
-interface Erc20ParseAmountInfo {
-  amountString: string
-  decimals: number
-}
-
-export function useParseAmountErc20(erc20ParseAmountInfo: MaybeRefOrGetter<Erc20ParseAmountInfo>) {
+export function useParseAmountErc20(
+  amountString: MaybeRefOrGetter<string>,
+  tokenDecimals: MaybeRefOrGetter<number>,
+) {
   const error = ref<string | null>(null)
   const amount = ref<bigint | null>(null)
 
   const parseAmount = () => {
-    const { amountString, decimals } = toValue(erc20ParseAmountInfo)
-    const amount = amountString.trim()
+    const decimals = toValue(tokenDecimals)
+    const amount = toValue(amountString).trim()
     if (!/^\d+(\.\d+)?$/.test(amount)) {
       throw new Error('Ingresá un monto válido. Usá punto para los decimales.')
     }

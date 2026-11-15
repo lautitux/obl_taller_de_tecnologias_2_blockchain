@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 
 interface AgreementPeriod {
   readonly dateRange: readonly Date[] | null
@@ -18,12 +18,19 @@ function dateWithTime(date: Date | undefined, time: string) {
   return result
 }
 
-export function useAgreementPeriod(agreement: AgreementPeriod) {
+export function useAgreementPeriod(agreementPeriod: MaybeRefOrGetter<AgreementPeriod>) {
+  const period = computed(() => toValue(agreementPeriod))
   const startDate = computed(() =>
-    dateWithTime(agreement.dateRange?.[0], agreement.customTimes ? agreement.startTime : '00:00'),
+    dateWithTime(
+      period.value.dateRange?.[0],
+      period.value.customTimes ? period.value.startTime : '00:00',
+    ),
   )
   const endDate = computed(() =>
-    dateWithTime(agreement.dateRange?.at(-1), agreement.customTimes ? agreement.endTime : '00:00'),
+    dateWithTime(
+      period.value.dateRange?.at(-1),
+      period.value.customTimes ? period.value.endTime : '00:00',
+    ),
   )
 
   const periodError = computed(() =>
