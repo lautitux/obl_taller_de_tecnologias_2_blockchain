@@ -10,7 +10,7 @@ import {
   useReadAllowanceErc20,
   useReadErc20,
 } from '@/composables/useErc20'
-import { isAddress, type Address } from 'viem'
+import { getAddress, isAddress, type Address } from 'viem'
 import { useCreateVestingAgreement } from '@/composables/useVesting'
 const { isConnected, isDisconnected, address: clientAddress } = useConnection()
 
@@ -30,11 +30,13 @@ const agreement = reactive({
 const { startDate, endDate, periodError } = useAgreementPeriod(agreement)
 const { contractAddress } = useVestingDeployment()
 
-const tokenAddress = computed(() => (isAddress(agreement.token) ? agreement.token : undefined))
+const tokenAddress = computed(() =>
+  isAddress(agreement.token) ? getAddress(agreement.token) : undefined,
+)
 
 const { decimals: tokenDecimals } = useReadErc20(tokenAddress)
 
-const { allowance: tokenAllowance, refresh: refreshAllowance } = useReadAllowanceErc20(
+const { allowance: tokenAllowance } = useReadAllowanceErc20(
   tokenAddress,
   clientAddress,
   contractAddress,
@@ -51,7 +53,6 @@ const hasEnoughAllowance = computed(() =>
 const {
   approve: approveTokens,
   isApproving,
-  isApproved,
   receipt: approvalTransaction,
   errorMessage: approvalError,
 } = useApproveErc20(tokenAddress)
@@ -70,7 +71,6 @@ const {
   errorMessage: creationError,
 } = useCreateVestingAgreement(contractAddress)
 
-const isRefreshingAllowance = shallowRef(false)
 const canSubmit = computed(
   () =>
     isConnected.value &&
@@ -83,28 +83,21 @@ const canSubmit = computed(
     tokenAmount.value != null &&
     !isApproving.value &&
     !isCreating.value &&
-    !isRefreshingAllowance.value &&
     !isCreated.value,
 )
 const canApprove = computed(() => canSubmit.value && !hasEnoughAllowance.value)
 const canCreate = computed(() => canSubmit.value && hasEnoughAllowance.value)
 
-async function handleApprove() {
+async function onApprove() {
   if (!canApprove.value) return
-  isRefreshingAllowance.value = true
-  try {
-    await approveTokens(contractAddress.value, tokenAmount.value)
-    if (isApproved.value) await refreshAllowance()
-  } finally {
-    isRefreshingAllowance.value = false
-  }
+  await approveTokens(contractAddress.value, tokenAmount.value)
 }
 
 async function onCreate() {
-  if (!canCreate.value) return
+  if (!canCreate.value || tokenAddress.value === undefined) return
   await createAgreement({
     beneficiary: agreement.beneficiary as Address,
-    token: agreement.token as Address,
+    token: tokenAddress.value,
     totalAmount: tokenAmount.value ?? 0n,
     startDate: BigInt((startDate.value?.getTime() ?? 0) / 1000),
     endDate: BigInt((endDate.value?.getTime() ?? 0) / 1000),
@@ -293,7 +286,7 @@ const revocabilityHint = computed(() =>
               :disabled="!canApprove"
               :loading="isApproving"
               prepend-icon="mdi-check-circle-outline"
-              @click="handleApprove"
+              @click="onApprove"
               >{{ hasEnoughAllowance ? 'Tokens aprobados' : 'Aprobar tokens' }}</v-btn
             >
             <v-alert v-if="isApproving" type="info" variant="tonal" class="mt-4" aria-live="polite">

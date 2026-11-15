@@ -3,7 +3,8 @@ import { agreementEventsBaseQueryKey } from '@/composables/useAgreementEvents'
 import type { Agreement, AgreementConfiguration, AgreementState } from '@/types/agreement'
 import type { TransactionReceipt } from '@/types/transaction'
 import { errorAsMessage, interpretError } from '@/utils/errors'
-import { useQueryClient } from '@tanstack/vue-query'
+import { invalidateErc20Allowances } from '@/composables/useErc20'
+import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract, useWriteContract } from '@wagmi/vue'
 import {
   simulateContract,
@@ -36,18 +37,28 @@ interface VestingReadOptions {
 
 const MISSING_CONTRACT_MESSAGE = 'El contrato no está desplegado en la red actual.'
 
-export function readVestingAgreementQueryKey(
+type VestingReadFunction = 'agreements' | 'vestedAmountOf'
+
+function invalidateAgreementReads(
+  queryClient: QueryClient,
   address: Address,
   agreementId: bigint,
-  chainId?: number | undefined,
+  chainId: number,
+  functionNames: readonly VestingReadFunction[],
 ) {
-  return readContractQueryKey({
-    address,
-    abi: vestingAbi,
-    functionName: 'agreements',
-    args: [agreementId],
-    chainId,
-  })
+  return Promise.all(
+    functionNames.map((functionName) =>
+      queryClient.invalidateQueries({
+        queryKey: readContractQueryKey({
+          abi: vestingAbi,
+          address,
+          functionName,
+          args: [agreementId],
+          chainId,
+        }),
+      }),
+    ),
+  )
 }
 
 export function useReadVestingAgreement(
@@ -160,6 +171,7 @@ export function useCreateVestingAgreement(address: MaybeRefOrGetter<Address | un
 
       isCreated.value = true
       void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
+      void invalidateErc20Allowances(queryClient, configuration.token, networkId)
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
@@ -197,7 +209,6 @@ export function useCancelVestingAgreement(address: MaybeRefOrGetter<Address | un
       const contract = toValue(address)
       if (contract === undefined) throw new Error(MISSING_CONTRACT_MESSAGE)
       const networkId = chainId.value
-      const readAgreementKey = readVestingAgreementQueryKey(contract, agreementId, networkId)
 
       const { request } = await simulateContract(config, {
         abi: vestingAbi,
@@ -215,7 +226,10 @@ export function useCancelVestingAgreement(address: MaybeRefOrGetter<Address | un
       }
 
       isCancelled.value = true
-      void queryClient.invalidateQueries({ queryKey: readAgreementKey })
+      void invalidateAgreementReads(queryClient, contract, agreementId, networkId, [
+        'agreements',
+        'vestedAmountOf',
+      ])
       void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
     } catch (err) {
       error.value = err as Error
@@ -257,7 +271,6 @@ export function useClaimVestedAmount(address: MaybeRefOrGetter<Address | undefin
         throw new Error('La cantidad a reclamar debe ser superior a 0')
       }
       const networkId = chainId.value
-      const readAgreementKey = readVestingAgreementQueryKey(contract, agreementId, networkId)
 
       const { request } = await simulateContract(config, {
         abi: vestingAbi,
@@ -276,7 +289,7 @@ export function useClaimVestedAmount(address: MaybeRefOrGetter<Address | undefin
 
       isClaimed.value = true
       void queryClient.invalidateQueries({ queryKey: agreementEventsBaseQueryKey() })
-      await queryClient.invalidateQueries({ queryKey: readAgreementKey })
+      await invalidateAgreementReads(queryClient, contract, agreementId, networkId, ['agreements'])
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)

@@ -1,7 +1,9 @@
 import type { TransactionReceipt } from '@/types/transaction'
 import { errorAsMessage, interpretError } from '@/utils/errors'
+import { useQueryClient, type QueryClient } from '@tanstack/vue-query'
 import { useChainId, useConfig, useReadContract } from '@wagmi/vue'
 import { simulateContract, waitForTransactionReceipt, writeContract } from '@wagmi/vue/actions'
+import { readContractQueryKey } from '@wagmi/vue/query'
 import { erc20Abi, maxUint256, parseUnits, type Address, type WriteContractErrorType } from 'viem'
 import {
   ref,
@@ -15,6 +17,21 @@ import {
 
 interface Erc20ReadOptions {
   enabled?: MaybeRefOrGetter<boolean>
+}
+
+export function invalidateErc20Allowances(
+  queryClient: QueryClient,
+  token: Address,
+  chainId: number,
+) {
+  return queryClient.invalidateQueries({
+    queryKey: readContractQueryKey({
+      abi: erc20Abi,
+      address: token,
+      functionName: 'allowance',
+      chainId,
+    }),
+  })
 }
 
 export function useReadErc20(
@@ -116,6 +133,7 @@ export function useApproveErc20(address: MaybeRefOrGetter<Address | undefined>) 
 
   const config = useConfig()
   const chainId = useChainId()
+  const queryClient = useQueryClient()
 
   const approve = async (spender: Address | undefined, value: bigint | null | undefined) => {
     if (isApproving.value) return
@@ -158,6 +176,7 @@ export function useApproveErc20(address: MaybeRefOrGetter<Address | undefined>) 
       }
 
       isApproved.value = true
+      await invalidateErc20Allowances(queryClient, token, networkId)
     } catch (err) {
       error.value = err as Error
       const interpretedError = interpretError(err)
