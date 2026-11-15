@@ -7,30 +7,22 @@ import { useDisplay } from 'vuetify'
 interface NavigationItem {
   title: string
   icon: string
-  to?: RouteLocationRaw
-  disabled: boolean
+  to: RouteLocationRaw
 }
 
 const navigationItems: NavigationItem[] = [
-  { title: 'Inicio', icon: 'mdi-home-outline', to: { name: 'home' }, disabled: false },
+  { title: 'Inicio', icon: 'mdi-home-outline', to: { name: 'home' } },
   {
     title: 'Crear acuerdo',
     icon: 'mdi-file-document-plus-outline',
     to: { name: 'create-agreement' },
-    disabled: false,
   },
   {
     title: 'Mis acuerdos',
     icon: 'mdi-file-document-multiple-outline',
     to: { name: 'my-agreements' },
-    disabled: false,
   },
-  {
-    title: 'Mis ingresos',
-    icon: 'mdi-wallet-outline',
-    to: { name: 'my-benefits' },
-    disabled: false,
-  },
+  { title: 'Mis ingresos', icon: 'mdi-wallet-outline', to: { name: 'my-benefits' } },
 ]
 
 const open = defineModel<boolean>({ required: true })
@@ -61,10 +53,8 @@ watch(
           v-for="item in navigationItems"
           :key="item.title"
           :to="item.to"
-          :disabled="item.disabled"
           :prepend-icon="item.icon"
           :title="item.title"
-          :subtitle="item.disabled ? 'Próximamente' : undefined"
           @click="open = false"
         />
       </v-list>
