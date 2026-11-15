@@ -2,9 +2,7 @@
 
 Obligatorio de Taller de Tecnologías 2. Aplicación descentralizada para crear **acuerdos de vesting lineal**: una persona (el _pagador_) deposita tokens ERC-20 en un contrato, y otra (el _beneficiario_) los recibe gradualmente a lo largo de un período.
 
-<!-- TODO: agregar la URL de GitHub Pages cuando la web esté publicada. -->
-
-> **Demo:** la web todavía no está publicada. Para probarla, seguí [Probar en Sepolia](#probar-en-sepolia).
+> **Demo:** [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi), conectada a los contratos de Sepolia. Para probarla paso a paso, seguí [Probar en Sepolia](#probar-en-sepolia).
 
 El repositorio es un monorepo con npm workspaces:
 
@@ -63,7 +61,6 @@ Esta guía usa los contratos que ya están desplegados en la testnet Sepolia, as
 
 ### 1. Requisitos
 
-- [Node.js](https://nodejs.org/) `^22.18.0` o `>=24.12.0`, con npm 11 o superior.
 - [MetaMask](https://metamask.io/) u otra billetera inyectada en el navegador.
 - Idealmente, **dos cuentas** en la billetera: una para el pagador y otra para el beneficiario.
 
@@ -89,16 +86,18 @@ Con unos `0.05 ETH` por cuenta alcanza para varias pruebas.
 
 Para ver el saldo en MetaMask, importar el token con la dirección `0xCDD14DF34E299dF2BCC63AD42fe171F58e73b7ff`.
 
-### 4. Levantar la web
+### 4. Abrir la web
 
-Desde la raíz del repositorio:
+Abrir [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi).
+
+Para correrla localmente hace falta [Node.js](https://nodejs.org/) `^22.18.0` o `>=24.12.0` con npm 11 o superior. Desde la raíz del repositorio:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Abrir `http://localhost:5173`.
+y abrir `http://localhost:5173`.
 
 La web usa RPCs públicos de Sepolia. Si alguno falla o limita los pedidos, se puede usar un RPC propio (Alchemy, Infura, etc.) creando el archivo `web/.env.local`:
 
