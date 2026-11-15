@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { AgreementState } from '@/types/agreement'
+import { useNow } from '@/composables/useNow'
 import { computed } from 'vue'
 
 const { state, startDate, endDate } = defineProps<{
@@ -17,8 +18,10 @@ const agreementStatusDisplay: Record<typeof status.value, { icon: string; color:
   Indeterminado: { color: 'warning', icon: 'mdi-file-question-outline' },
 }
 
+const currentTime = useNow()
+
 const status = computed(() => {
-  const now = Math.round(Date.now() / 1000)
+  const now = Math.floor(currentTime.value / 1000)
   switch (state) {
     case AgreementState.Cancelled:
       return 'Cancelado'

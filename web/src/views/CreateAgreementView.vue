@@ -76,6 +76,7 @@ const canSubmit = computed(
     endDate.value != null &&
     tokenDecimals.value != null &&
     tokenAmount.value != null &&
+    tokenAllowance.value !== undefined &&
     !isApproving.value &&
     !isCreating.value &&
     !isCreated.value,

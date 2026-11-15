@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useReadErc20 } from '@/composables/useErc20'
+import { useNow } from '@/composables/useNow'
 import { useVestingDeployment } from '@/composables/useVestingDeployment'
 import {
   useCancelVestingAgreement,
@@ -63,8 +64,9 @@ const availableAmount = computed(
 const { claim, isClaiming } = useClaimVestedAmount(contractAddress)
 
 const { address } = useConnection()
+const now = useNow()
 
-const canCanel = computed(() =>
+const canCancel = computed(() =>
   Boolean(
     showCancelButton &&
     address.value !== undefined &&
@@ -72,7 +74,7 @@ const canCanel = computed(() =>
     agreement.value.configuration.revocable &&
     !isCancelled.value &&
     agreement.value.state === AgreementState.Active &&
-    Date.now() / 1000 < agreement.value.configuration.endDate &&
+    Math.floor(now.value / 1000) < agreement.value.configuration.endDate &&
     isAddressEqual(agreement.value.payer, address.value),
   ),
 )
@@ -170,7 +172,7 @@ async function onReload() {
         >Ver detalles</v-btn
       >
       <v-btn
-        v-if="canCanel"
+        v-if="canCancel"
         :disabled="isCancelling"
         :loading="isCancelling"
         color="error"
