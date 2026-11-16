@@ -92,7 +92,7 @@ contract Vesting {
             address(this),
             config.totalAmount
         );
-        // Fee-on-transfer tokens would leave the contract underfunded.
+
         require(
             config.token.balanceOf(address(this)) - balanceBefore ==
                 config.totalAmount,

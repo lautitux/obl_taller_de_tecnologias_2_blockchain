@@ -74,6 +74,7 @@ const contractErrorMessages: Record<ContractErrorName<typeof vestingAbi>, string
   InsufficientVestedAmount: 'El acuerdo no tiene suficiente saldo devengado.',
   AgreementNotFound: 'El acuerdo especificado no existe.',
   AgreementNotActive: 'El acuerdo no se encuentra activo.',
+  UnsupportedToken: 'El token no es compatible: cobra comisión al transferir.',
   SafeERC20FailedOperation: 'El token rechazó la transferencia.',
   ERC20InsufficientBalance: 'El balance de tokens es insuficiente.',
   ERC20InvalidSender: 'El remitente de tokens es inválido.',
