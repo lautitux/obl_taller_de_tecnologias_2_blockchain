@@ -94,11 +94,14 @@ contract Vesting is ReentrancyGuardTransient {
             config.totalAmount
         );
 
-        require(
-            config.token.balanceOf(address(this)) - balanceBefore ==
-                config.totalAmount,
-            UnsupportedToken()
-        );
+        // Fee-on-transfer tokens deliver less than totalAmount and would leave
+        // the agreement underfunded. The strict equality is safe: both reads
+        // happen in this call, and nonReentrant keeps any other Vesting
+        // operation from moving the balance between them.
+        uint256 received =
+            config.token.balanceOf(address(this)) - balanceBefore;
+        // forge-lint: disable-next-line(incorrect-strict-equality)
+        require(received == config.totalAmount, UnsupportedToken());
 
         emit AgreementCreated(
             agreementId,
