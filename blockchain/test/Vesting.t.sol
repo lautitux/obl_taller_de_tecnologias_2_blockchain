@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import {Vesting} from "../contracts/Vesting.sol";
 import {MockToken} from "./mocks/MockToken.sol";
+import {FeeOnTransferToken} from "./mocks/FeeOnTransferToken.sol";
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
@@ -192,6 +193,19 @@ contract CreateAgreementTest is VestingTestBase {
                 AMOUNT
             )
         );
+
+        _createAgreement();
+    }
+
+    function test_createAgreement_whenTokenChargesTransferFee_revertsWithUnsupportedToken()
+        public
+    {
+        FeeOnTransferToken feeToken = new FeeOnTransferToken();
+        feeToken.mint(payer, AMOUNT);
+        vm.prank(payer);
+        feeToken.approve(address(vesting), AMOUNT);
+        configuration.token = IERC20(address(feeToken));
+        vm.expectRevert(Vesting.UnsupportedToken.selector);
 
         _createAgreement();
     }
