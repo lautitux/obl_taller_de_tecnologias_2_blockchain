@@ -146,8 +146,6 @@ contract Vesting is ReentrancyGuardTransient {
         agreement.state = AgreementState.Cancelled;
         agreement.vestedAmountBeforeCancelled = vestedAmount;
 
-        token.safeTransfer(payer, unvestedAmount);
-
         emit AgreementCancelled(
             agreementId,
             payer,
@@ -156,6 +154,8 @@ contract Vesting is ReentrancyGuardTransient {
             vestedAmount,
             unvestedAmount
         );
+
+        token.safeTransfer(payer, unvestedAmount);
     }
 
     function claimAmountFrom(
@@ -208,9 +208,9 @@ contract Vesting is ReentrancyGuardTransient {
             agreement.state = AgreementState.Completed;
         }
 
-        token.safeTransfer(beneficiary, claimAmount);
-
         emit AgreementWithdrawal(agreementId, beneficiary, claimAmount);
+
+        token.safeTransfer(beneficiary, claimAmount);
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
