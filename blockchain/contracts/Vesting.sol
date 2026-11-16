@@ -41,6 +41,7 @@ contract Vesting {
     error InsufficientVestedAmount();
     error AgreementNotFound();
     error AgreementNotActive();
+    error UnsupportedToken();
 
     event AgreementCreated(
         uint256 indexed agreementId,
@@ -85,10 +86,17 @@ contract Vesting {
             alreadyWithdrawnAmount: 0
         });
 
+        uint256 balanceBefore = config.token.balanceOf(address(this));
         config.token.safeTransferFrom(
             msg.sender,
             address(this),
             config.totalAmount
+        );
+        // Fee-on-transfer tokens would leave the contract underfunded.
+        require(
+            config.token.balanceOf(address(this)) - balanceBefore ==
+                config.totalAmount,
+            UnsupportedToken()
         );
 
         emit AgreementCreated(

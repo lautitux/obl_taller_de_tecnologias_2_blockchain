@@ -163,10 +163,19 @@ contract VestingReentrancyTest is VestingTestBase {
             claimAmount
         );
 
-        uint256 createdId = _createAgreement();
+        vm.prank(payer);
+        try vesting.createAgreement(configuration) returns (uint256 createdId) {
+            assertEq(createdId, NEW_AGREEMENT_ID);
+            _assertReentryAttempted(action, targetId);
+        } catch (bytes memory reason) {
+            // A reentry that moves the contract's balance during the deposit
+            // makes the received amount differ, so the token is rejected.
+            assertEq(
+                reason,
+                abi.encodeWithSelector(Vesting.UnsupportedToken.selector)
+            );
+        }
 
-        assertEq(createdId, NEW_AGREEMENT_ID);
-        _assertReentryAttempted(action, targetId);
         _assertAccounting(HALF);
     }
 
