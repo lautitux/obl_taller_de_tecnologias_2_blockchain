@@ -7,6 +7,7 @@ import {VestingTestBase} from "./Vesting.t.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 contract ReentrantToken is ERC20 {
     Vesting internal vesting;
@@ -279,7 +280,7 @@ contract VestingReentrancyTest is VestingTestBase {
 
         _claimAsBeneficiary(agreementId, HALF);
 
-        _assertReentryRejected(Vesting.InsufficientVestedAmount.selector);
+        _assertReentryRejected();
         assertEq(token.balanceOf(payer), PAYER_FUNDS + HALF);
         _assertAccounting(HALF);
     }
@@ -290,7 +291,7 @@ contract VestingReentrancyTest is VestingTestBase {
 
         _claimAsBeneficiary(agreementId, AMOUNT);
 
-        _assertReentryRejected(Vesting.InsufficientVestedAmount.selector);
+        _assertReentryRejected();
         assertEq(token.balanceOf(address(vesting)), AMOUNT);
         (, , Vesting.AgreementState state, , ) = vesting.agreements(
             agreementId
@@ -306,7 +307,7 @@ contract VestingReentrancyTest is VestingTestBase {
 
         _claimAsBeneficiary(agreementId, HALF);
 
-        _assertReentryRejected(Vesting.InsufficientVestedAmount.selector);
+        _assertReentryRejected();
         assertEq(token.balanceOf(address(vesting)), AMOUNT);
         _assertAccounting(AMOUNT);
     }
@@ -316,7 +317,7 @@ contract VestingReentrancyTest is VestingTestBase {
 
         _cancelAsPayer(agreementId);
 
-        _assertReentryRejected(Vesting.AgreementNotActive.selector);
+        _assertReentryRejected();
         assertEq(token.balanceOf(address(vesting)), 2 * AMOUNT - HALF);
         _assertAccounting(HALF);
     }
@@ -440,13 +441,16 @@ contract VestingReentrancyTest is VestingTestBase {
         }
     }
 
-    function _assertReentryRejected(bytes4 expectedError) private view {
+    /// The guard rejects every nested call before it reaches the business logic.
+    function _assertReentryRejected() private view {
         assertEq(reentrantToken.reentrancyAttempts(), 1);
         assertEq(reentrantToken.successfulReentries(), 0);
         assertFalse(reentrantToken.lastReentrySucceeded());
         assertEq(
             reentrantToken.lastReentryReturnData(),
-            abi.encodeWithSelector(expectedError)
+            abi.encodeWithSelector(
+                ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector
+            )
         );
     }
 
