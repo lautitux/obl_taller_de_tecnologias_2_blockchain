@@ -3,9 +3,12 @@ pragma solidity ^0.8.34;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-contract Vesting {
+contract Vesting is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+    using Math for uint256;
 
     enum AgreementState {
         Active,
@@ -40,6 +43,7 @@ contract Vesting {
     error InsufficientVestedAmount();
     error AgreementNotFound();
     error AgreementNotActive();
+    error UnsupportedToken();
 
     event AgreementCreated(
         uint256 indexed agreementId,
@@ -70,7 +74,7 @@ contract Vesting {
 
     function createAgreement(
         AgreementConfiguration calldata config
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(config.beneficiary != address(0), InvalidBeneficiary());
         require(config.totalAmount != 0, InvalidAmount());
         require(config.endDate > config.startDate, InvalidDateRange());
@@ -84,11 +88,21 @@ contract Vesting {
             alreadyWithdrawnAmount: 0
         });
 
+        uint256 balanceBefore = config.token.balanceOf(address(this));
         config.token.safeTransferFrom(
             msg.sender,
             address(this),
             config.totalAmount
         );
+
+        // Fee-on-transfer tokens deliver less than totalAmount and would leave
+        // the agreement underfunded. The strict equality is safe: both reads
+        // happen in this call, and nonReentrant keeps any other Vesting
+        // operation from moving the balance between them.
+        uint256 received =
+            config.token.balanceOf(address(this)) - balanceBefore;
+        // forge-lint: disable-next-line(incorrect-strict-equality)
+        require(received == config.totalAmount, UnsupportedToken());
 
         emit AgreementCreated(
             agreementId,
@@ -103,7 +117,7 @@ contract Vesting {
         return agreementId;
     }
 
-    function cancelAgreement(uint256 agreementId) external {
+    function cancelAgreement(uint256 agreementId) external nonReentrant {
         Agreement storage agreement = agreements[agreementId];
         require(
             agreement.configuration.beneficiary != address(0),
@@ -136,8 +150,6 @@ contract Vesting {
         agreement.state = AgreementState.Cancelled;
         agreement.vestedAmountBeforeCancelled = vestedAmount;
 
-        token.safeTransfer(payer, unvestedAmount);
-
         emit AgreementCancelled(
             agreementId,
             payer,
@@ -146,12 +158,14 @@ contract Vesting {
             vestedAmount,
             unvestedAmount
         );
+
+        token.safeTransfer(payer, unvestedAmount);
     }
 
     function claimAmountFrom(
         uint256 agreementId,
         uint256 claimAmount
-    ) external {
+    ) external nonReentrant {
         Agreement storage agreement = agreements[agreementId];
         address beneficiary = agreement.configuration.beneficiary;
         require(beneficiary != address(0), AgreementNotFound());
@@ -198,9 +212,9 @@ contract Vesting {
             agreement.state = AgreementState.Completed;
         }
 
-        token.safeTransfer(beneficiary, claimAmount);
-
         emit AgreementWithdrawal(agreementId, beneficiary, claimAmount);
+
+        token.safeTransfer(beneficiary, claimAmount);
     }
 
     function vestedAmountOf(uint256 agreementId) public view returns (uint256) {
@@ -240,6 +254,6 @@ contract Vesting {
         uint256 secondsElapsed = secondsNow - startDate;
         uint256 secondsTotal = endDate - startDate;
 
-        return (amount * secondsElapsed) / secondsTotal;
+        return amount.mulDiv(secondsElapsed, secondsTotal);
     }
 }

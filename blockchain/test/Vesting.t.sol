@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import {Vesting} from "../contracts/Vesting.sol";
 import {MockToken} from "./mocks/MockToken.sol";
+import {FeeOnTransferToken} from "./mocks/FeeOnTransferToken.sol";
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
@@ -196,6 +197,19 @@ contract CreateAgreementTest is VestingTestBase {
         _createAgreement();
     }
 
+    function test_createAgreement_whenTokenChargesTransferFee_revertsWithUnsupportedToken()
+        public
+    {
+        FeeOnTransferToken feeToken = new FeeOnTransferToken();
+        feeToken.mint(payer, AMOUNT);
+        vm.prank(payer);
+        feeToken.approve(address(vesting), AMOUNT);
+        configuration.token = IERC20(address(feeToken));
+        vm.expectRevert(Vesting.UnsupportedToken.selector);
+
+        _createAgreement();
+    }
+
     function test_createAgreement_whenBeneficiaryIsZeroAddress_reverts()
         public
     {
@@ -321,6 +335,19 @@ contract VestedAmountTest is VestingTestBase {
         assertLe(vested * DURATION, proportionalAmount);
         assertLt(proportionalAmount, (vested + 1) * DURATION);
         assertLe(vested, configuration.totalAmount);
+    }
+
+    function test_vestedAmountOf_whenAmountIsMaxUint_returnsHalfAtMidpointWithoutOverflow()
+        public
+    {
+        configuration.totalAmount = type(uint256).max;
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        // amount * secondsElapsed would exceed uint256 without mulDiv.
+        assertEq(vested, type(uint256).max / 2);
     }
 
     function test_vestedAmountOf_whenAgreementDoesNotExist_reverts() public {
