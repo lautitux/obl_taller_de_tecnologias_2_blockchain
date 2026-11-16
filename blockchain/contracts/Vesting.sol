@@ -4,8 +4,9 @@ pragma solidity ^0.8.34;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-contract Vesting {
+contract Vesting is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     enum AgreementState {
@@ -72,7 +73,7 @@ contract Vesting {
 
     function createAgreement(
         AgreementConfiguration calldata config
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(config.beneficiary != address(0), InvalidBeneficiary());
         require(config.totalAmount != 0, InvalidAmount());
         require(config.endDate > config.startDate, InvalidDateRange());
@@ -112,7 +113,7 @@ contract Vesting {
         return agreementId;
     }
 
-    function cancelAgreement(uint256 agreementId) external {
+    function cancelAgreement(uint256 agreementId) external nonReentrant {
         Agreement storage agreement = agreements[agreementId];
         require(
             agreement.configuration.beneficiary != address(0),
@@ -160,7 +161,7 @@ contract Vesting {
     function claimAmountFrom(
         uint256 agreementId,
         uint256 claimAmount
-    ) external {
+    ) external nonReentrant {
         Agreement storage agreement = agreements[agreementId];
         address beneficiary = agreement.configuration.beneficiary;
         require(beneficiary != address(0), AgreementNotFound());
