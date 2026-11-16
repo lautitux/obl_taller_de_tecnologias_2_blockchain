@@ -149,34 +149,34 @@ async function onReload() {
     <template #subtitle>#{{ event.agreementId }}</template>
     <template #text>
       <span v-if="showPayer">
-        <span>Pagador: </span>
-        <span>{{ agreement.payer }}</span
+        <span>Pagador:</span
+        >{{ ' ' }}<span>{{ agreement.payer }}</span
         ><br />
       </span>
       <span v-if="showBeneficiary">
-        <span>Beneficiario:</span>
-        <span>{{ agreement.configuration.beneficiary }}</span
+        <span>Beneficiario:</span
+        >{{ ' ' }}<span>{{ agreement.configuration.beneficiary }}</span
         ><br />
       </span>
       <span>
-        <span>Monto total: </span>
-        <span
+        <span>Monto total:</span
+        >{{ ' ' }}<span
           >{{ formatUnits(agreement.configuration.totalAmount, decimals ?? 0) }} {{ symbol }}</span
         ><br />
       </span>
       <span>
-        <span>Monto devengado: </span>
-        <span>{{ formatUnits(vestedAmount ?? 0n, decimals ?? 0) }} {{ symbol }}</span
+        <span>Monto devengado:</span
+        >{{ ' ' }}<span>{{ formatUnits(vestedAmount ?? 0n, decimals ?? 0) }} {{ symbol }}</span
         ><br />
       </span>
       <span v-if="showClaimedAmount">
-        <span>Monto reclamado: </span>
-        <span>{{ formatUnits(agreement.alreadyWithdrawnAmount, decimals ?? 0) }} {{ symbol }}</span
+        <span>Monto reclamado:</span
+        >{{ ' ' }}<span>{{ formatUnits(agreement.alreadyWithdrawnAmount, decimals ?? 0) }} {{ symbol }}</span
         ><br />
       </span>
       <span v-if="showAvailableAmount">
-        <span>Monto disponible: </span>
-        <span>{{ formatUnits(availableAmount, decimals ?? 0) }} {{ symbol }}</span
+        <span>Monto disponible:</span
+        >{{ ' ' }}<span>{{ formatUnits(availableAmount, decimals ?? 0) }} {{ symbol }}</span
         ><br />
       </span>
     </template>

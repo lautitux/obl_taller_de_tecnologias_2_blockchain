@@ -2,7 +2,13 @@
 
 Obligatorio de Taller de Tecnologías 2. Aplicación descentralizada para crear **acuerdos de vesting lineal**: una persona (el _pagador_) deposita tokens ERC-20 en un contrato, y otra (el _beneficiario_) los recibe gradualmente a lo largo de un período.
 
-> **Demo:** [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi), conectada a los contratos de Sepolia. Para probarla paso a paso, seguí [Probar en Sepolia](#probar-en-sepolia).
+| Recurso      | Enlace                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Repositorio  | [github.com/lautitux/obl_taller_de_tecnologias_2_blockchain](https://github.com/lautitux/obl_taller_de_tecnologias_2_blockchain) |
+| Demo         | [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi), conectada a los contratos de Sepolia                                   |
+| Video (demo) | [youtu.be/syWiXfsg82E](https://youtu.be/syWiXfsg82E)                                                                             |
+
+Para probar la demo paso a paso, seguí [Probar en Sepolia](#probar-en-sepolia). Para correr el proyecto localmente, seguí [Instalación y uso](#instalación-y-uso), y para los tests y el coverage, [Tests](#tests).
 
 El repositorio es un monorepo con npm workspaces:
 
@@ -14,6 +20,8 @@ El repositorio es un monorepo con npm workspaces:
 - [Funcionalidades](#funcionalidades)
 - [Cómo funciona](#cómo-funciona)
 - [Probar en Sepolia](#probar-en-sepolia)
+- [Instalación y uso](#instalación-y-uso)
+- [Tests](#tests)
 - [Contratos desplegados](#contratos-desplegados)
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Anexo A — Desarrollo local con Hardhat](#anexo-a--desarrollo-local-con-hardhat)
@@ -90,20 +98,7 @@ Para ver el saldo en MetaMask, importar el token con la dirección `0xCDD14DF34E
 
 Abrir [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi).
 
-Para correrla localmente hace falta [Node.js](https://nodejs.org/) `^22.18.0` o `>=24.12.0` con npm 11 o superior. Desde la raíz del repositorio:
-
-```sh
-npm ci
-npm run dev
-```
-
-y abrir `http://localhost:5173`.
-
-La web usa RPCs públicos de Sepolia. Si alguno falla o limita los pedidos, se puede usar un RPC propio (Alchemy, Infura, etc.) creando el archivo `web/.env.local`:
-
-```sh
-VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<tu-api-key>
-```
+También se puede correr localmente: ver [Instalación y uso](#instalación-y-uso).
 
 ### 5. Recorrido de prueba
 
@@ -129,11 +124,70 @@ VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<tu-api-key>
 | El botón **Reclamar** no aparece              | Todavía no se devengó nada; esperar a la fecha de inicio y recargar la tarjeta. |
 | El acuerdo nuevo tarda en aparecer            | Los eventos se sincronizan cada ~12 segundos (un bloque de Sepolia).            |
 
+## Instalación y uso
+
+Requisitos: [Node.js](https://nodejs.org/) `^22.18.0` o `>=24.12.0` con npm 11 o superior. Todos los comandos se ejecutan desde la raíz del repositorio.
+
+**1. Instalar** las dependencias de los dos workspaces:
+
+```sh
+npm ci
+```
+
+**2. Compilar** los contratos:
+
+```sh
+npm run build:blockchain
+```
+
+**3. Desplegar** los contratos:
+
+- En un **nodo local** de Hardhat: `npm run dev:blockchain` en una terminal y, en otra, los comandos de Ignition del [Anexo A](#anexo-a--desarrollo-local-con-hardhat).
+- En **Sepolia**: no hace falta, porque ya están desplegados (ver [Contratos desplegados](#contratos-desplegados)). Para un despliegue nuevo, ver el [Anexo B](#anexo-b--desplegar-en-sepolia).
+
+**4. Levantar la dApp**: construir la web y servir el build de producción, que es el mismo que está publicado en la demo.
+
+```sh
+npm run build:web
+npm run preview:web
+```
+
+Abrir `http://localhost:4173` (o el link impreso en consola) y conectar la billetera en Sepolia o en la red local de Hardhat. La web elige el contrato según la red.
+
+`preview:web` solo sirve lo que hay en `web/dist`: después de cualquier cambio hay que volver a correr `build:web`. Para desarrollar con recarga en caliente, usar `npm run dev` (ver el [Anexo A](#anexo-a--desarrollo-local-con-hardhat)).
+
+La web usa RPCs públicos de Sepolia. Si alguno falla o limita los pedidos, se puede usar un RPC propio (Alchemy, Infura, etc.) creando el archivo `web/.env.local` **antes del build**, porque la variable se incluye al construir:
+
+```sh
+VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<tu-api-key>
+```
+
+## Tests
+
+Los contratos se prueban con tests de Solidity (`blockchain/test/*.t.sol`) que ejecuta Hardhat, usando los cheatcodes de `forge-std`. Cubren la creación, el reclamo y la cancelación de acuerdos, el cálculo del devengo (incluidos tests de fuzzing), los errores del contrato y los intentos de reentrancia con tokens maliciosos.
+
+Ejecutar los tests:
+
+```sh
+npm test
+```
+
+Generar el coverage:
+
+```sh
+npm run test:coverage
+```
+
+Ejecuta los tests con instrumentación, imprime una tabla de cobertura por contrato y **falla si algún contrato de producción no llega al 100% de líneas**. Los reportes quedan en `blockchain/coverage/`:
+
+- `blockchain/coverage/html/index.html`: reporte navegable, línea por línea.
+- `blockchain/coverage/lcov.info`: formato LCOV, para herramientas externas.
+
 ## Contratos desplegados
 
 | Red             | Contrato             | Dirección                                                                                                                       |
 | --------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Sepolia         | `Vesting`            | [`0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18`](https://sepolia.etherscan.io/address/0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18) |
+| Sepolia         | `Vesting`            | [`0x1d1CbE4EE8cfcfA3369130E7be891396322da590`](https://sepolia.etherscan.io/address/0x1d1CbE4EE8cfcfA3369130E7be891396322da590) |
 | Sepolia         | `VestingToken` (VDT) | [`0xCDD14DF34E299dF2BCC63AD42fe171F58e73b7ff`](https://sepolia.etherscan.io/address/0xCDD14DF34E299dF2BCC63AD42fe171F58e73b7ff) |
 | Hardhat (local) | `Vesting`            | `0x5FbDB2315678afecb367f032d93F642f64180aa3`                                                                                    |
 | Hardhat (local) | `VestingToken` (VDT) | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512`                                                                                    |
@@ -208,6 +262,8 @@ npx hardhat ignition deploy ignition/modules/VestingToken.ts --network sepolia -
 
 Ignition guarda las direcciones en `ignition/deployments/chain-11155111/deployed_addresses.json`. Después hay que actualizar `web/src/config/contract-deployments.ts` con la nueva dirección de `Vesting` y su **bloque de despliegue**. La web empieza a buscar eventos desde ese bloque, para no recorrer la cadena desde el bloque 0.
 
+Para desplegar una **versión modificada** de un contrato que ya está desplegado, Ignition responde _Nothing new to deploy_, porque considera completado ese módulo. Hay que agregar `--reset`, que borra el estado de despliegue de toda la red (incluido el registro de los otros módulos, aunque esos contratos siguen existiendo on-chain), o usar un `--deployment-id` nuevo para conservar el historial.
+
 > [!WARNING]
 > No expongas la clave privada mediante variables `VITE_*`: todo lo que empieza con `VITE_` termina en el bundle público de la web.
 
@@ -215,20 +271,21 @@ Ignition guarda las direcciones en `ignition/deployments/chain-11155111/deployed
 
 Todos los comandos se ejecutan desde la raíz. Siguen la convención `acción:ámbito`; sin ámbito, se ejecutan en ambos workspaces.
 
-| Comando                            | Función                                                     |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `npm run dev`                      | Inicia la web en `http://localhost:5173`                    |
-| `npm run dev:blockchain`           | Inicia el nodo local de Hardhat                             |
-| `npm run build`                    | Compila los contratos y construye la web                    |
-| `npm run typecheck`                | Comprueba los tipos de ambos workspaces                     |
-| `npm run test`                     | Ejecuta los tests de los contratos                          |
-| `npm run test:coverage`            | Genera la cobertura y exige 100% de líneas por contrato     |
-| `npm run lint`                     | Forge lint (Solidity), Oxlint y ESLint (web), sin modificar |
-| `npm run lint:fix:web`             | Aplica las correcciones automáticas de la web               |
-| `npm run lint:advisory:blockchain` | Muestra sugerencias informativas y de gas de Forge          |
-| `npm run format`                   | Formatea el repositorio con Prettier                        |
-| `npm run format:check`             | Comprueba el formato sin modificar archivos                 |
-| `npm run preview:web`              | Sirve localmente el build de producción de la web           |
+| Comando                            | Función                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `npm run dev`                      | Inicia la web en modo desarrollo, con recarga en caliente, en `http://localhost:5173` |
+| `npm run dev:blockchain`           | Inicia el nodo local de Hardhat                                                       |
+| `npm run build`                    | Compila los contratos y construye la web                                              |
+| `npm run build:web`                | Construye la web en `web/dist`                                                        |
+| `npm run preview:web`              | Sirve el build de producción en `http://localhost:4173`                               |
+| `npm run typecheck`                | Comprueba los tipos de ambos workspaces                                               |
+| `npm run test`                     | Ejecuta los tests de los contratos                                                    |
+| `npm run test:coverage`            | Genera la cobertura y exige 100% de líneas por contrato                               |
+| `npm run lint`                     | Forge lint (Solidity), Oxlint y ESLint (web), sin modificar                           |
+| `npm run lint:fix:web`             | Aplica las correcciones automáticas de la web                                         |
+| `npm run lint:advisory:blockchain` | Muestra sugerencias informativas y de gas de Forge                                    |
+| `npm run format`                   | Formatea el repositorio con Prettier                                                  |
+| `npm run format:check`             | Comprueba el formato sin modificar archivos                                           |
 
 Para pasar argumentos a una tarea: `npm run test:solidity -- --coverage` o `npm run dev -- --host 127.0.0.1`.
 

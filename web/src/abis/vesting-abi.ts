@@ -63,6 +63,11 @@ export const vestingAbi = [
     type: 'error',
   },
   {
+    inputs: [],
+    name: 'UnsupportedToken',
+    type: 'error',
+  },
+  {
     anonymous: false,
     inputs: [
       {

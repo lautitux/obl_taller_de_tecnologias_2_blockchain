@@ -17,8 +17,8 @@ export const vestingDeployments: Readonly<Record<number, VestingDeployment>> = {
     deploymentBlock: 0n,
   },
   [sepolia.id]: {
-    address: '0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18',
-    deploymentBlock: 12_121_622n,
+    address: '0x1d1CbE4EE8cfcfA3369130E7be891396322da590',
+    deploymentBlock: 12_148_350n,
   },
 }
 
