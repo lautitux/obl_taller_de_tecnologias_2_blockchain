@@ -90,13 +90,13 @@ function formatDate(date: bigint) {
             <tr>
               <th>Progreso</th>
               <td>
-                <span class="mr-4 d-inline-flex align-center"
+                <span class="mr-4 d-inline-flex align-center ga-1"
                   ><v-icon color="primary">mdi-circle-medium</v-icon> Retirado</span
                 >
-                <span class="mr-4 d-inline-flex align-center"
+                <span class="mr-4 d-inline-flex align-center ga-1"
                   ><v-icon color="success">mdi-circle-medium</v-icon> Devengado</span
                 >
-                <span class="mr-4 d-inline-flex align-center"
+                <span class="mr-4 d-inline-flex align-center ga-1"
                   ><v-icon color="error">mdi-circle-medium</v-icon> Cancelado</span
                 >
                 <v-progress-linear
@@ -200,7 +200,7 @@ function formatDate(date: bigint) {
                   event.blockTimestamp ? formatDate(event.blockTimestamp) : 'Pendiente'
                 }}</template>
                 <template #text>
-                  <div class="d-inline-flex align-center">
+                  <div class="d-inline-flex align-center ga-1">
                     <v-icon class="mr-4" :color="agreementEvents[event.eventName]!.color">{{
                       agreementEvents[event.eventName]!.icon
                     }}</v-icon>
