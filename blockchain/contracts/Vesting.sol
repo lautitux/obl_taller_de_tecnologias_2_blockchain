@@ -8,6 +8,7 @@ import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/Reentrancy
 
 contract Vesting is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
+    using Math for uint256;
 
     enum AgreementState {
         Active,
@@ -253,6 +254,6 @@ contract Vesting is ReentrancyGuardTransient {
         uint256 secondsElapsed = secondsNow - startDate;
         uint256 secondsTotal = endDate - startDate;
 
-        return Math.mulDiv(amount, secondsElapsed, secondsTotal);
+        return amount.mulDiv(secondsElapsed, secondsTotal);
     }
 }
