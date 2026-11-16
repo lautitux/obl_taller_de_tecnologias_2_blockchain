@@ -323,6 +323,19 @@ contract VestedAmountTest is VestingTestBase {
         assertLe(vested, configuration.totalAmount);
     }
 
+    function test_vestedAmountOf_whenAmountIsMaxUint_returnsHalfAtMidpointWithoutOverflow()
+        public
+    {
+        configuration.totalAmount = type(uint256).max;
+        uint256 agreementId = _givenAgreement();
+        vm.warp(MIDPOINT);
+
+        uint256 vested = vesting.vestedAmountOf(agreementId);
+
+        // amount * secondsElapsed would exceed uint256 without mulDiv.
+        assertEq(vested, type(uint256).max / 2);
+    }
+
     function test_vestedAmountOf_whenAgreementDoesNotExist_reverts() public {
         vm.expectRevert(Vesting.AgreementNotFound.selector);
 
