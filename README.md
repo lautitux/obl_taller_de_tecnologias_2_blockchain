@@ -6,7 +6,7 @@ Obligatorio de Taller de Tecnologías 2. Aplicación descentralizada para crear 
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | Repositorio  | [github.com/lautitux/obl_taller_de_tecnologias_2_blockchain](https://github.com/lautitux/obl_taller_de_tecnologias_2_blockchain) |
 | Demo         | [blockchain.lautaro.fyi](https://blockchain.lautaro.fyi), conectada a los contratos de Sepolia                                   |
-| Video (demo) | _Pendiente_ <!-- TODO: reemplazar por el enlace al video de demo (hasta 8 minutos). -->                                          |
+| Video (demo) | [youtu.be/syWiXfsg82E](https://youtu.be/syWiXfsg82E)                                                                             |
 
 Para probar la demo paso a paso, seguí [Probar en Sepolia](#probar-en-sepolia). Para correr el proyecto localmente, seguí [Instalación y uso](#instalación-y-uso), y para los tests y el coverage, [Tests](#tests).
 
