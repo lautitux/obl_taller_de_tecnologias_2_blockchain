@@ -133,7 +133,7 @@ VITE_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/<tu-api-key>
 
 | Red             | Contrato             | Dirección                                                                                                                       |
 | --------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Sepolia         | `Vesting`            | [`0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18`](https://sepolia.etherscan.io/address/0x40b1f59fa038aD6Ec9c103A2F350CaE6F1670D18) |
+| Sepolia         | `Vesting`            | [`0x1d1CbE4EE8cfcfA3369130E7be891396322da590`](https://sepolia.etherscan.io/address/0x1d1CbE4EE8cfcfA3369130E7be891396322da590) |
 | Sepolia         | `VestingToken` (VDT) | [`0xCDD14DF34E299dF2BCC63AD42fe171F58e73b7ff`](https://sepolia.etherscan.io/address/0xCDD14DF34E299dF2BCC63AD42fe171F58e73b7ff) |
 | Hardhat (local) | `Vesting`            | `0x5FbDB2315678afecb367f032d93F642f64180aa3`                                                                                    |
 | Hardhat (local) | `VestingToken` (VDT) | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512`                                                                                    |
@@ -207,6 +207,8 @@ npx hardhat ignition deploy ignition/modules/VestingToken.ts --network sepolia -
 ```
 
 Ignition guarda las direcciones en `ignition/deployments/chain-11155111/deployed_addresses.json`. Después hay que actualizar `web/src/config/contract-deployments.ts` con la nueva dirección de `Vesting` y su **bloque de despliegue**. La web empieza a buscar eventos desde ese bloque, para no recorrer la cadena desde el bloque 0.
+
+Para desplegar una **versión modificada** de un contrato que ya está desplegado, Ignition responde _Nothing new to deploy_, porque considera completado ese módulo. Hay que agregar `--reset`, que borra el estado de despliegue de toda la red (incluido el registro de los otros módulos, aunque esos contratos siguen existiendo on-chain), o usar un `--deployment-id` nuevo para conservar el historial.
 
 > [!WARNING]
 > No expongas la clave privada mediante variables `VITE_*`: todo lo que empieza con `VITE_` termina en el bundle público de la web.
